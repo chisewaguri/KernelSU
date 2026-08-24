@@ -4,6 +4,13 @@ plugins {
     alias(libs.plugins.compose.compiler) apply false
 }
 
+// local signing override; CI secrets in gradle.properties take precedence
+file("signing.properties").takeIf { it.exists() }?.let {
+    java.util.Properties().apply { it.inputStream().use(::load) }.forEach { (k, v) ->
+        extra[k.toString()] = v
+    }
+}
+
 val androidMinSdkVersion by extra(29)
 val androidTargetSdkVersion by extra(37)
 val androidCompileSdkVersion by extra(37)
