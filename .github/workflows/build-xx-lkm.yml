@@ -18,7 +18,7 @@ jobs:
     name: Build ${{ matrix.kmi }} from xx branch
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/ylarod/ddk-min:${{ matrix.kmi }}-20260313
+      image: ghcr.io/ylarod/ddk-min:${{ matrix.kmi }}-20260828
       options: --privileged
     strategy:
       matrix:
@@ -30,6 +30,7 @@ jobs:
           - android14-6.1
           - android15-6.6
           - android16-6.12
+          - android17-6.18
     steps:
     - name: Checkout
       uses: actions/checkout@v7
