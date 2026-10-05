@@ -18,6 +18,10 @@ static defex_get_task_creds_t defex_get_task_creds;
 static defex_set_task_creds_t defex_set_task_creds;
 static bool defex_enforce_hooked;
 
+// Clear when the kernel lacks the Samsung DEFEX symbols, so the helpers fall back
+// to the standard credential path.
+static bool defex_available;
+
 static int ksu_samsung_defex_pre_handler(struct kprobe *probe, struct pt_regs *regs)
 {
     struct task_struct *task = (struct task_struct *)regs->regs[0];
@@ -43,16 +47,17 @@ int ksu_samsung_defex_init(void)
     defex_get_task_creds = (defex_get_task_creds_t)ksu_resolve_symbol_for_functable_hook("get_task_creds");
     defex_set_task_creds = (defex_set_task_creds_t)ksu_resolve_symbol_for_functable_hook("set_task_creds");
     if (!defex_get_task_creds || !defex_set_task_creds) {
-        pr_err("Samsung DEFEX credential functions unavailable\n");
-        return -ENOENT;
+        pr_info("Samsung DEFEX not present, using standard credential path\n");
+        return 0;
     }
 
     ret = register_kprobe(&defex_enforce_kprobe);
     if (ret) {
-        pr_err("Samsung DEFEX enforce hook unavailable: %d\n", ret);
-        return ret;
+        pr_warn("Samsung DEFEX enforce hook unavailable: %d\n", ret);
+        return 0;
     }
     defex_enforce_hooked = true;
+    defex_available = true;
 
     pr_info("Samsung DEFEX credential synchronization and KSU-task bypass enabled\n");
 #endif
@@ -78,6 +83,9 @@ void ksu_samsung_defex_sync_current(void)
     unsigned int stored_egid;
     unsigned short cred_flags;
     int ret;
+
+    if (!defex_available)
+        return;
 
     defex_get_task_creds(current, &stored_uid, &stored_fsuid, &stored_egid, &cred_flags);
 

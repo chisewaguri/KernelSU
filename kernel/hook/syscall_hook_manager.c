@@ -422,6 +422,11 @@ void __init ksu_syscall_hook_manager_init(void)
         ret = rkp_sucompat_hook_init();
         if (ret)
             pr_err("hook_manager: RKP sucompat hook init failed: %d\n", ret);
+#else
+        // These hooks do not use the syscall dispatcher, so register them here
+        // as well on the path with no dispatcher slot.
+        ksu_setuid_hook_init();
+        ksu_sucompat_init();
 #endif
         return;
     }
@@ -464,6 +469,9 @@ void __exit ksu_syscall_hook_manager_exit(void)
 #if defined(CONFIG_KSU_RKP_NO_PATCH_TEXT) && defined(CONFIG_KRETPROBES) && defined(__aarch64__)
         rkp_sucompat_hook_exit();
         rkp_setresuid_hook_exit();
+#else
+        ksu_sucompat_exit();
+        ksu_setuid_hook_exit();
 #endif
         ksu_syscall_hook_exit();
         return;
