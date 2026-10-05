@@ -130,9 +130,6 @@ int __init kernelsu_init(void)
 
     ksu_init_symbol_resolver();
 
-#ifdef CONFIG_KSU_SAMSUNG_KDP
-    pr_info("Samsung KDP credential reference handling enabled\n");
-#endif
     ret = ksu_samsung_kdp_init();
     if (ret)
         return ret;

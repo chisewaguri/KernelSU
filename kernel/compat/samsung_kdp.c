@@ -52,6 +52,13 @@ static inc_rlimit_ucounts_t inc_rlimit_ucounts_fn;
 static dec_rlimit_ucounts_t dec_rlimit_ucounts_fn;
 #endif
 
+/*
+ * The KDP symbols only exist on Samsung kernels. A build with
+ * CONFIG_KSU_SAMSUNG_KDP still has to boot on other devices, so the feature
+ * turns itself off when the symbols are missing rather than failing the load.
+ */
+static bool kdp_available;
+
 static void __nocfi samsung_kdp_commit_worker(struct work_struct *work)
 {
     struct samsung_kdp_commit_work *commit_work = container_of(work, struct samsung_kdp_commit_work, work);
@@ -119,6 +126,11 @@ void __nocfi ksu_samsung_kdp_put_cred(const struct cred *cred)
 #ifdef CONFIG_KSU_SAMSUNG_KDP
     struct cred *mutable_cred = (struct cred *)cred;
 
+    if (!kdp_available) {
+        put_cred(cred);
+        return;
+    }
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
     if (mutable_cred && kdp_usecount_sub_and_test_fn(1, mutable_cred))
 #else
@@ -135,33 +147,33 @@ int ksu_samsung_kdp_init(void)
 #ifdef CONFIG_KSU_SAMSUNG_KDP
     prepare_ro_creds_fn = (prepare_ro_creds_t)ksu_resolve_symbol_for_functable_hook("prepare_ro_creds");
     kdp_assign_pgd_fn = (kdp_assign_pgd_t)ksu_resolve_symbol_for_functable_hook("kdp_assign_pgd");
-    if (!prepare_ro_creds_fn || !kdp_assign_pgd_fn) {
-        pr_err("Samsung KDP credential functions unavailable\n");
-        return -ENOENT;
-    }
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
     kdp_usecount_sub_and_test_fn = (kdp_usecount_sub_and_test_t)ksu_resolve_symbol_for_functable_hook(
         "kdp_usecount_sub_and_test");
-    if (!kdp_usecount_sub_and_test_fn) {
-        pr_err("Samsung KDP credential functions unavailable\n");
-        return -ENOENT;
-    }
 #else
     kdp_usecount_dec_and_test_fn = (kdp_usecount_dec_and_test_t)ksu_resolve_symbol_for_functable_hook(
         "kdp_usecount_dec_and_test");
-    if (!kdp_usecount_dec_and_test_fn) {
-        pr_err("Samsung KDP credential functions unavailable\n");
-        return -ENOENT;
-    }
 #endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0)
     inc_rlimit_ucounts_fn = (inc_rlimit_ucounts_t)ksu_resolve_symbol_for_functable_hook("inc_rlimit_ucounts");
     dec_rlimit_ucounts_fn = (dec_rlimit_ucounts_t)ksu_resolve_symbol_for_functable_hook("dec_rlimit_ucounts");
-    if (!inc_rlimit_ucounts_fn || !dec_rlimit_ucounts_fn) {
-        pr_err("Samsung KDP ucounts functions unavailable\n");
-        return -ENOENT;
-    }
 #endif
+
+    kdp_available = prepare_ro_creds_fn && kdp_assign_pgd_fn
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+                    && kdp_usecount_sub_and_test_fn
+#else
+                    && kdp_usecount_dec_and_test_fn
+#endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0)
+                    && inc_rlimit_ucounts_fn && dec_rlimit_ucounts_fn
+#endif
+        ;
+
+    if (!kdp_available) {
+        pr_info("Samsung KDP not present, using standard credential path\n");
+        return 0;
+    }
 
     pr_info("Samsung KDP task-scoped credential and native PGD path enabled\n");
 #endif
@@ -180,6 +192,9 @@ int ksu_samsung_kdp_commit_creds(struct cred *cred)
 
     if (!cred)
         return -EINVAL;
+
+    if (!kdp_available)
+        return commit_creds(cred);
 
     INIT_WORK(&commit_work.work, samsung_kdp_commit_worker);
     init_completion(&commit_work.completion);
