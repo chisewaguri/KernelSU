@@ -250,5 +250,24 @@ fi
 wait_for_jobs manager
 echo "=== Repacking manager APK ==="
 rm -f out/*.apk dist/*.apk
+if [ ! -f "repack-config.json" ]; then
+    cat << EOF > repack-config.json
+{
+    "signing": {
+        "keystore_path": "$KEYSTORE_FILE",
+        "key_alias": "$KEY_ALIAS",
+        "keystore_pass": "$KEYSTORE_PASSWORD",
+        "key_pass": "$KEY_PASSWORD"
+    },
+    "app_build_type": "release",
+    "ksud_build_type": "release",
+    "arch": [
+        "arm64-v8a"
+    ],
+    "output_name": "",
+    "strip": true
+}
+EOF
+fi
 python3 repack_apk.py repack
 cp -f dist/*.apk out/
