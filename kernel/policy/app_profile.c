@@ -204,7 +204,7 @@ int escape_with_root_profile(void)
     setup_groups(profile, cred);
     setup_selinux(profile->selinux_domain, cred);
 
-    ret = ksu_samsung_kdp_commit_creds(cred);
+    ret = ksu_commit_creds(cred);
     if (ret) {
         pr_err("Samsung KDP credential install failed: %d\n", ret);
         goto out_abort_creds;
