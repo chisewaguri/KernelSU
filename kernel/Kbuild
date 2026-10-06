@@ -137,6 +137,12 @@ endif
 KSU_NEW_DCACHE_FLUSH := $(shell grep -q __flush_dcache_area $(srctree)/arch/arm64/include/asm/cacheflush.h ; echo $$?)
 $(info -- KSU_NEW_DCACHE_FLUSH: $(KSU_NEW_DCACHE_FLUSH))
 
+KSU_IS_PR_BUILD ?= 0
+ifeq ($(KSU_IS_PR_BUILD),0)
+KSU_PACKAGE_NAME ?= me.weishu.kernelsu
+else
+KSU_PACKAGE_NAME ?= me.weishu.kernelsu.pr
+endif
 
 ifndef KSU_EXPECTED_SIZE
 KSU_EXPECTED_SIZE := 0x352
@@ -146,16 +152,15 @@ ifndef KSU_EXPECTED_HASH
 KSU_EXPECTED_HASH := de573d3b174b62317bd4de9dfa545580f6425454376335884eb707b871177fa3
 endif
 
-ifdef KSU_MANAGER_PACKAGE
-ccflags-y += -DKSU_MANAGER_PACKAGE=\"$(KSU_MANAGER_PACKAGE)\"
-$(info -- KernelSU Manager package name: $(KSU_MANAGER_PACKAGE))
-endif
-
+$(info -- KernelSU Manager package name: $(KSU_PACKAGE_NAME))
 $(info -- KernelSU Manager signature size: $(KSU_EXPECTED_SIZE))
 $(info -- KernelSU Manager signature hash: $(KSU_EXPECTED_HASH))
+$(info -- KernelSU is PR Build: $(KSU_IS_PR_BUILD))
 
+ccflags-y += -DKSU_PACKAGE_NAME=\"$(KSU_PACKAGE_NAME)\"
 ccflags-y += -DEXPECTED_SIZE=$(KSU_EXPECTED_SIZE)
 ccflags-y += -DEXPECTED_HASH=\"$(KSU_EXPECTED_HASH)\"
+ccflags-y += -DKSU_IS_PR_BUILD=$(KSU_IS_PR_BUILD)
 
 ifdef KSU_EXPECTED_SIZE2
 ifndef KSU_EXPECTED_HASH2
