@@ -1,14 +1,15 @@
 #include <linux/cred.h>
 #include <linux/errno.h>
+#include <linux/jump_label.h>
 #include <linux/kprobes.h>
 #include <linux/sched.h>
 
+#include "arch.h"
 #include "compat/samsung_defex.h"
 #include "infra/symbol_resolver.h"
 #include "klog.h"
 #include "selinux/selinux.h"
 
-#ifdef CONFIG_ARM64
 typedef void (*defex_get_task_creds_t)(struct task_struct *task, unsigned int *uid, unsigned int *fsuid,
                                        unsigned int *egid, unsigned short *cred_flags);
 typedef int (*defex_set_task_creds_t)(struct task_struct *task, unsigned int uid, unsigned int fsuid, unsigned int egid,
@@ -19,18 +20,19 @@ static defex_set_task_creds_t defex_set_task_creds;
 static bool defex_enforce_hooked;
 
 /*
- * DEFEX only exists on Samsung kernels, but every arm64 build has to boot
- * elsewhere too, so the feature turns itself off when its symbols are missing.
+ * DEFEX only exists on Samsung kernels, but every build has to boot elsewhere
+ * too. The key stays off until ksu_samsung_defex_init finds the symbols and
+ * registers its kprobe, so other devices skip the credential sync.
  */
-static bool defex_available;
+DEFINE_STATIC_KEY_FALSE(ksu_samsung_defex_key);
 
 static int ksu_samsung_defex_pre_handler(struct kprobe *probe, struct pt_regs *regs)
 {
-    struct task_struct *task = (struct task_struct *)regs->regs[0];
+    struct task_struct *task = (struct task_struct *)PT_REGS_PARM1(regs);
 
     (void)probe;
     if (task == current && current_uid().val == 0)
-        regs->regs[0] = 0;
+        PT_REGS_PARM1(regs) = 0;
 
     return 0;
 }
@@ -39,11 +41,9 @@ static struct kprobe defex_enforce_kprobe = {
     .symbol_name = "task_defex_enforce",
     .pre_handler = ksu_samsung_defex_pre_handler,
 };
-#endif
 
 int ksu_samsung_defex_init(void)
 {
-#ifdef CONFIG_ARM64
     int ret;
 
     defex_get_task_creds = (defex_get_task_creds_t)ksu_resolve_symbol_for_functable_hook("get_task_creds");
@@ -59,26 +59,22 @@ int ksu_samsung_defex_init(void)
         return 0;
     }
     defex_enforce_hooked = true;
-    defex_available = true;
+    static_branch_enable(&ksu_samsung_defex_key);
 
     pr_info("Samsung DEFEX credential synchronization and KSU-task bypass enabled\n");
-#endif
     return 0;
 }
 
 void ksu_samsung_defex_exit(void)
 {
-#ifdef CONFIG_ARM64
     if (defex_enforce_hooked) {
         unregister_kprobe(&defex_enforce_kprobe);
         defex_enforce_hooked = false;
     }
-#endif
 }
 
 void ksu_samsung_defex_sync_current(void)
 {
-#ifdef CONFIG_ARM64
     const struct cred *cred = current_cred();
     unsigned int stored_uid;
     unsigned int stored_fsuid;
@@ -86,7 +82,7 @@ void ksu_samsung_defex_sync_current(void)
     unsigned short cred_flags;
     int ret;
 
-    if (!defex_available)
+    if (!static_branch_unlikely(&ksu_samsung_defex_key))
         return;
 
     defex_get_task_creds(current, &stored_uid, &stored_fsuid, &stored_egid, &cred_flags);
@@ -104,5 +100,4 @@ void ksu_samsung_defex_sync_current(void)
     ret = defex_set_task_creds(current, stored_uid, stored_fsuid, stored_egid, cred_flags);
     if (ret)
         pr_err("Samsung DEFEX credential synchronization failed: %d\n", ret);
-#endif
 }
