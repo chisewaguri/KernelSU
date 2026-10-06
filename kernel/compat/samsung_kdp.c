@@ -14,7 +14,7 @@
 #include "ksu_samsung_kdp.h"
 #include "klog.h"
 
-#ifdef CONFIG_KSU_SAMSUNG_KDP
+#ifdef CONFIG_ARM64
 enum samsung_kdp_cred_command {
     SAMSUNG_KDP_COPY_CREDS = 0,
 };
@@ -53,9 +53,8 @@ static dec_rlimit_ucounts_t dec_rlimit_ucounts_fn;
 #endif
 
 /*
- * The KDP symbols only exist on Samsung kernels. A build with
- * CONFIG_KSU_SAMSUNG_KDP still has to boot on other devices, so the feature
- * turns itself off when the symbols are missing rather than failing the load.
+ * The KDP symbols only exist on Samsung kernels, but every arm64 build has to
+ * boot elsewhere too, so the feature turns itself off when they are missing.
  */
 static bool kdp_available;
 
@@ -119,11 +118,11 @@ static void __nocfi samsung_kdp_commit_worker(struct work_struct *work)
 out:
     complete(&commit_work->completion);
 }
-#endif /* CONFIG_KSU_SAMSUNG_KDP */
+#endif /* CONFIG_ARM64 */
 
 void __nocfi ksu_samsung_kdp_put_cred(const struct cred *cred)
 {
-#ifdef CONFIG_KSU_SAMSUNG_KDP
+#ifdef CONFIG_ARM64
     struct cred *mutable_cred = (struct cred *)cred;
 
     if (!kdp_available) {
@@ -144,7 +143,7 @@ void __nocfi ksu_samsung_kdp_put_cred(const struct cred *cred)
 
 int ksu_samsung_kdp_init(void)
 {
-#ifdef CONFIG_KSU_SAMSUNG_KDP
+#ifdef CONFIG_ARM64
     prepare_ro_creds_fn = (prepare_ro_creds_t)ksu_resolve_symbol_for_functable_hook("prepare_ro_creds");
     kdp_assign_pgd_fn = (kdp_assign_pgd_t)ksu_resolve_symbol_for_functable_hook("kdp_assign_pgd");
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
@@ -186,7 +185,7 @@ void ksu_samsung_kdp_exit(void)
 
 int ksu_samsung_kdp_commit_creds(struct cred *cred)
 {
-#ifdef CONFIG_KSU_SAMSUNG_KDP
+#ifdef CONFIG_ARM64
     struct samsung_kdp_commit_work commit_work;
     bool queued;
 

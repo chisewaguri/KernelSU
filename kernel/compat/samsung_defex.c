@@ -8,7 +8,7 @@
 #include "klog.h"
 #include "selinux/selinux.h"
 
-#ifdef CONFIG_KSU_SAMSUNG_DEFEX
+#ifdef CONFIG_ARM64
 typedef void (*defex_get_task_creds_t)(struct task_struct *task, unsigned int *uid, unsigned int *fsuid,
                                        unsigned int *egid, unsigned short *cred_flags);
 typedef int (*defex_set_task_creds_t)(struct task_struct *task, unsigned int uid, unsigned int fsuid, unsigned int egid,
@@ -19,9 +19,8 @@ static defex_set_task_creds_t defex_set_task_creds;
 static bool defex_enforce_hooked;
 
 /*
- * DEFEX only exists on Samsung kernels. A build with
- * CONFIG_KSU_SAMSUNG_DEFEX still has to boot elsewhere, so the feature turns
- * itself off when the symbols are missing rather than failing the load.
+ * DEFEX only exists on Samsung kernels, but every arm64 build has to boot
+ * elsewhere too, so the feature turns itself off when its symbols are missing.
  */
 static bool defex_available;
 
@@ -44,7 +43,7 @@ static struct kprobe defex_enforce_kprobe = {
 
 int ksu_samsung_defex_init(void)
 {
-#ifdef CONFIG_KSU_SAMSUNG_DEFEX
+#ifdef CONFIG_ARM64
     int ret;
 
     defex_get_task_creds = (defex_get_task_creds_t)ksu_resolve_symbol_for_functable_hook("get_task_creds");
@@ -69,7 +68,7 @@ int ksu_samsung_defex_init(void)
 
 void ksu_samsung_defex_exit(void)
 {
-#ifdef CONFIG_KSU_SAMSUNG_DEFEX
+#ifdef CONFIG_ARM64
     if (defex_enforce_hooked) {
         unregister_kprobe(&defex_enforce_kprobe);
         defex_enforce_hooked = false;
@@ -79,7 +78,7 @@ void ksu_samsung_defex_exit(void)
 
 void ksu_samsung_defex_sync_current(void)
 {
-#ifdef CONFIG_KSU_SAMSUNG_DEFEX
+#ifdef CONFIG_ARM64
     const struct cred *cred = current_cred();
     unsigned int stored_uid;
     unsigned int stored_fsuid;

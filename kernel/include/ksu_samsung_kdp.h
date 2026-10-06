@@ -7,7 +7,7 @@ int ksu_samsung_kdp_init(void);
 void ksu_samsung_kdp_exit(void);
 int ksu_samsung_kdp_commit_creds(struct cred *cred);
 
-#ifdef CONFIG_KSU_SAMSUNG_KDP
+#ifdef CONFIG_ARM64
 void ksu_samsung_kdp_put_cred(const struct cred *cred);
 
 static inline void ksu_put_cred(const struct cred *cred)

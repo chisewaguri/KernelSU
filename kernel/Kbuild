@@ -72,12 +72,6 @@ endif
 ifeq ($(CONFIG_KSU_RKP_NO_PATCH_TEXT),y)
 ccflags-y += -DCONFIG_KSU_RKP_NO_PATCH_TEXT=1
 endif
-ifeq ($(CONFIG_KSU_SAMSUNG_KDP),y)
-ccflags-y += -DCONFIG_KSU_SAMSUNG_KDP=1
-endif
-ifeq ($(CONFIG_KSU_SAMSUNG_DEFEX),y)
-ccflags-y += -DCONFIG_KSU_SAMSUNG_DEFEX=1
-endif
 endif
 
 kernelsu-objs += extras.o
