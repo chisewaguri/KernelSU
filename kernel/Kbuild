@@ -5,6 +5,7 @@ kernelsu-objs += compat/jailbreak.o compat/kdp.o compat/defex.o compat/rkp.o com
 kernelsu-objs += feature/kernel_umount.o
 kernelsu-objs += feature/sulog.o
 kernelsu-objs += feature/sucompat.o
+kernelsu-objs += feature/module_blacklist.o
 
 kernelsu-objs += hook/lsm_hook.o
 kernelsu-objs += hook/setuid_hook.o

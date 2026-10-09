@@ -25,6 +25,7 @@
 #include "hook/syscall_hook.h"
 #include "feature/adb_root.h"
 #include "feature/selinux_hide.h"
+#include "feature/module_blacklist.h"
 #include "infra/symbol_resolver.h"
 #include "compat/jailbreak.h"
 
@@ -83,6 +84,9 @@ module_param(allow_shell, bool, 0);
 
 bool ksu_no_custom_rc = false;
 module_param_named(norc, ksu_no_custom_rc, bool, 0);
+
+char ksu_block_modules[256];
+module_param_string(block_modules, ksu_block_modules, sizeof(ksu_block_modules), 0);
 
 #ifdef MODULE
 bool ksu_bundled = false;
@@ -177,6 +181,8 @@ int __init kernelsu_init(void)
 
     } else {
         ksu_syscall_hook_manager_init();
+
+        ksu_module_blacklist_init(ksu_block_modules);
 
         ksu_allowlist_init();
 
