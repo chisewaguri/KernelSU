@@ -1,7 +1,5 @@
 #include <linux/cred.h>
 #include <linux/jump_label.h>
-#include <linux/kprobes.h>
-#include <linux/ptrace.h>
 #include <linux/sched.h>
 
 #include "compat/jailbreak.h"
@@ -20,6 +18,11 @@ typedef int (*defex_set_task_creds_t)(struct task_struct *, unsigned int, unsign
 
 static defex_get_task_creds_t defex_get_task_creds_fn;
 static defex_set_task_creds_t defex_set_task_creds_fn;
+
+#if defined(CONFIG_KRETPROBES) && defined(__aarch64__)
+#include <linux/kprobes.h>
+#include <linux/ptrace.h>
+
 static bool defex_kprobe_registered;
 
 static int defex_enforce_pre_handler(struct kprobe *probe, struct pt_regs *regs)
@@ -36,6 +39,7 @@ static struct kprobe defex_enforce_kprobe = {
     .symbol_name = "task_defex_enforce",
     .pre_handler = defex_enforce_pre_handler,
 };
+#endif
 
 void __nocfi ksu_defex_sync_current(void)
 {
@@ -68,7 +72,9 @@ void __nocfi ksu_defex_sync_current(void)
 
 void defex_jb_init(void)
 {
+#if defined(CONFIG_KRETPROBES) && defined(__aarch64__)
     int ret;
+#endif
 
     defex_get_task_creds_fn =
         (defex_get_task_creds_t)ksu_resolve_symbol_for_functable_hook("get_task_creds");
@@ -77,22 +83,27 @@ void defex_jb_init(void)
     if (!defex_get_task_creds_fn || !defex_set_task_creds_fn)
         return;
 
+#if defined(CONFIG_KRETPROBES) && defined(__aarch64__)
     ret = register_kprobe(&defex_enforce_kprobe);
     if (ret) {
         pr_warn("KSU: DEFEX kprobe failed: %d\n", ret);
         return;
     }
     defex_kprobe_registered = true;
+#endif
+
     static_branch_enable(&ksu_defex_key);
     pr_info("KSU: Samsung DEFEX detected\n");
 }
 
 void defex_jb_exit(void)
 {
+#if defined(CONFIG_KRETPROBES) && defined(__aarch64__)
     if (defex_kprobe_registered) {
         unregister_kprobe(&defex_enforce_kprobe);
         defex_kprobe_registered = false;
     }
+#endif
     static_branch_disable(&ksu_defex_key);
 }
 
