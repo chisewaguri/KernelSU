@@ -33,6 +33,8 @@ std::string get_lkm_variant();
 
 bool is_late_load_mode();
 
+bool is_boot_completed();
+
 bool is_manager();
 
 bool is_pr_build();

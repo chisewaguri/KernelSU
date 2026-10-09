@@ -23,11 +23,11 @@ data class HomeUiState(
     val isRootAvailable: Boolean,
     val isSafeMode: Boolean,
     val isLateLoadMode: Boolean,
+    val isBootCompleted: Boolean,
     val checkUpdateEnabled: Boolean,
     val latestVersionInfo: LatestVersionInfo,
     val currentManagerVersionCode: Long,
     val systemInfo: SystemInfo,
-    val showKsudWarning: Boolean = false,
 ) {
     val isSELinuxPermissive: Boolean
         get() = systemInfo.selinuxStatus == "Permissive"
@@ -50,6 +50,11 @@ data class HomeUiState(
 
     val showRootWarning: Boolean
         get() = ksuVersion != null && !isRootAvailable
+
+    // The kernel never saw boot_completed this boot, so ksud did not run and
+    // modules are not mounted. Kernel 3.x reported it during late load instead.
+    val showKsudWarning: Boolean
+        get() = isManager && ksuVersion != null && !isLateLoadMode && !isBootCompleted
 
     val showManagerPrBuildWarning: Boolean
         get() = isManager && isManagerPrBuild
