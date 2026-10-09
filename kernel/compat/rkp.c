@@ -15,6 +15,7 @@ DEFINE_STATIC_KEY_FALSE(ksu_rkp_key);
 #include <linux/task_work.h>
 
 #include "feature/sucompat.h"
+#include "feature/adb_root.h"
 #include "hook/setuid_hook.h"
 #include "hook/syscall_event_bridge.h"
 #include "hook/syscall_hook.h"
@@ -41,6 +42,10 @@ static bool samsung_sucompat_should_redirect(int syscall_nr)
         syscall_regs->syscallno = syscall_nr;
         return false;
     }
+
+    // adb root has no kprobe of its own, so let the execve kprobe carry it.
+    if (static_branch_unlikely(&ksu_adb_root) && syscall_nr == __NR_execve)
+        return true;
 
     return ksu_su_compat_enabled &&
            ksu_is_allow_uid_for_current(current_uid().val);
