@@ -139,6 +139,14 @@ bool is_late_load_mode() {
     return false;
 }
 
+bool is_boot_completed() {
+    auto info = get_info();
+    if (info.version > 0) {
+        return (info.flags & KSU_GET_INFO_FLAG_BOOT_COMPLETED) != 0;
+    }
+    return false;
+}
+
 bool is_manager() {
     auto info = get_info();
     if (info.version > 0) {

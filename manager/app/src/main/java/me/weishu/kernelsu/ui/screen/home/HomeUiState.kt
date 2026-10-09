@@ -23,6 +23,7 @@ data class HomeUiState(
     val isRootAvailable: Boolean,
     val isSafeMode: Boolean,
     val isLateLoadMode: Boolean,
+    val isBootCompleted: Boolean,
     val checkUpdateEnabled: Boolean,
     val latestVersionInfo: LatestVersionInfo,
     val currentManagerVersionCode: Long,
@@ -50,6 +51,11 @@ data class HomeUiState(
     val showRootWarning: Boolean
         get() = ksuVersion != null && !isRootAvailable
 
+    // The kernel never saw boot_completed this boot, so ksud did not run and
+    // modules are not mounted. Kernel 3.x reported it during late load instead.
+    val showKsudWarning: Boolean
+        get() = ksuVersion != null && !isLateLoadMode && !isBootCompleted
+
     val showManagerPrBuildWarning: Boolean
         get() = isManager && isManagerPrBuild
 
@@ -65,4 +71,5 @@ data class HomeActions(
     val onInstallClick: () -> Unit,
     val onOpenUrl: (String) -> Unit,
     val onJailbreakClick: () -> Unit = {},
+    val onKsudWarningClick: () -> Unit = {},
 )

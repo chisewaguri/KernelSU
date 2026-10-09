@@ -98,6 +98,7 @@ class HomeViewModel(
             isRootAvailable = isRootAvailable,
             isSafeMode = Natives.isSafeMode,
             isLateLoadMode = Natives.isLateLoadMode,
+            isBootCompleted = Natives.isBootCompleted,
             checkUpdateEnabled = settingsRepo.checkUpdate,
             latestVersionInfo = LatestVersionInfo(),
             currentManagerVersionCode = managerVersion.versionCode,

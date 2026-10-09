@@ -10,7 +10,8 @@
 // 3: scoped su-session driver fd
 // 4: add KSU_GET_INFO_FLAG_BUNDLED
 // 5: add EVENT_SERVICES with a start/skip result
-static const __u32 KERNEL_SU_UAPI_VERSION = 5;
+// 6: add KSU_GET_INFO_FLAG_BOOT_COMPLETED
+static const __u32 KERNEL_SU_UAPI_VERSION = 6;
 
 /* Magic numbers for reboot hook to install fd */
 static const __u32 KSU_INSTALL_MAGIC1 = 0xDEADBEEF;
@@ -30,6 +31,7 @@ static const __u32 KSU_GET_INFO_FLAG_MANAGER = (1U << 1);
 static const __u32 KSU_GET_INFO_FLAG_LATE_LOAD = (1U << 2);
 static const __u32 KSU_GET_INFO_FLAG_PR_BUILD = (1U << 3);
 static const __u32 KSU_GET_INFO_FLAG_BUNDLED = (1U << 4);
+static const __u32 KSU_GET_INFO_FLAG_BOOT_COMPLETED = (1U << 5);
 
 struct ksu_get_info_cmd {
     __u32 version; /* Output: KERNEL_SU_VERSION */
