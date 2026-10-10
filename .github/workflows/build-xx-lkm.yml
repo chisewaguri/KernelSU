@@ -77,6 +77,7 @@ jobs:
         # The xx branch Makefile carries upstream defaults; fall back to fork
         # values when the caller doesn't provide them (e.g. non-PR builds).
         PACKAGE_NAME="${PACKAGE_NAME:-com.chisewaguri.ksu}"
+        sed -i 's/"com\.kowx712\.supermanager"/KSU_PACKAGE_NAME/g' manager/throne_tracker.c
         EXPECTED_SIZE="${EXPECTED_SIZE:-0x375}"
         EXPECTED_HASH="${EXPECTED_HASH:-484fcba6e6c43b1fb09700633bf2fb4758f13cb0b2f4457b80d075084b26c588}"
 
