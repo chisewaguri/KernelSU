@@ -74,9 +74,9 @@ jobs:
 
         echo "=== Building kernelsu.ko for KMI: ${{ matrix.kmi }} from xx branch ==="
 
-        # The xx branch Makefile carries upstream defaults; fall back to KowSU
+        # The xx branch Makefile carries upstream defaults; fall back to fork
         # values when the caller doesn't provide them (e.g. non-PR builds).
-        PACKAGE_NAME="${PACKAGE_NAME:-com.chisewaguri.kernelsu}"
+        PACKAGE_NAME="${PACKAGE_NAME:-com.chisewaguri.ksu}"
         EXPECTED_SIZE="${EXPECTED_SIZE:-0x352}"
         EXPECTED_HASH="${EXPECTED_HASH:-de573d3b174b62317bd4de9dfa545580f6425454376335884eb707b871177fa3}"
 
