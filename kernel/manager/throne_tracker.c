@@ -107,7 +107,22 @@ static FILLDIR_RETURN_TYPE my_actor(struct dir_context *ctx, const char *name, i
         return FILLDIR_ACTOR_CONTINUE;
     }
 
-    if (d_type == DT_DIR && my_ctx->depth > 0) {
+    if (d_type != DT_DIR)
+        return FILLDIR_ACTOR_CONTINUE;
+
+    // base.apk is looked up directly so the package directory itself is never
+    // opened. Opening it would be visible to an inotify watch held by the
+    // package's own app (IN_OPEN/IN_ACCESS with an empty name). The check must
+    // run before the depth add: on Android <= 12 the package dir sits directly
+    // under /data/app, so it would otherwise be opened on the next pass.
+    if (maybe_manager_apk_dir(dirpath)) {
+        snprintf(candidate_path, DATA_PATH_LEN, "%s/base.apk", dirpath);
+        strcpy(cached_manager_apk_path, candidate_path);
+        // As soon as we saw a candidate package dir, we can stop
+        return FILLDIR_ACTOR_STOP;
+    }
+
+    if (my_ctx->depth > 1) {
         struct data_path *data = kzalloc(sizeof(struct data_path), GFP_KERNEL);
 
         if (!data) {
@@ -118,18 +133,6 @@ static FILLDIR_RETURN_TYPE my_actor(struct dir_context *ctx, const char *name, i
         strscpy(data->dirpath, dirpath, DATA_PATH_LEN);
         data->depth = my_ctx->depth - 1;
         list_add_tail(&data->list, my_ctx->data_path_list);
-
-        return FILLDIR_ACTOR_CONTINUE;
-    }
-
-    // now put this on candidate_path
-    if (d_type == DT_REG && namelen == 8 && !memcmp(name, "base.apk", 8)) {
-        if (maybe_manager_apk_dir(my_ctx->parent_dir)) {
-            snprintf(candidate_path, DATA_PATH_LEN, "%s/%.*s", my_ctx->parent_dir, namelen, name);
-            strcpy(cached_manager_apk_path, candidate_path);
-        }
-        // As soon as we met the base.apk, we can stop
-        return FILLDIR_ACTOR_STOP;
     }
 
     return FILLDIR_ACTOR_CONTINUE;
