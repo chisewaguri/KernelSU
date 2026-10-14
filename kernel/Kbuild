@@ -172,9 +172,9 @@ $(info -- KSU_NEW_DCACHE_FLUSH: $(KSU_NEW_DCACHE_FLUSH))
 
 KSU_IS_PR_BUILD ?= 0
 ifeq ($(KSU_IS_PR_BUILD),0)
-KSU_PACKAGE_NAME ?= com.kowx712.supermanager
+KSU_PACKAGE_NAME ?= com.chisewaguri.kernelsu
 else
-KSU_PACKAGE_NAME ?= com.kowx712.supermanager
+KSU_PACKAGE_NAME ?= com.chisewaguri.kernelsu
 endif
 KSU_EXPECTED_SIZE ?= 0x375
 KSU_EXPECTED_HASH ?= 484fcba6e6c43b1fb09700633bf2fb4758f13cb0b2f4457b80d075084b26c588
