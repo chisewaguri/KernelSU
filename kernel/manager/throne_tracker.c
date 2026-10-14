@@ -110,15 +110,12 @@ static FILLDIR_RETURN_TYPE my_actor(struct dir_context *ctx, const char *name, i
     if (d_type != DT_DIR)
         return FILLDIR_ACTOR_CONTINUE;
 
-    // base.apk is looked up directly so the package directory itself is never
-    // opened. Opening it would be visible to an inotify watch held by the
-    // package's own app (IN_OPEN/IN_ACCESS with an empty name). The check must
-    // run before the depth add: on Android <= 12 the package dir sits directly
-    // under /data/app, so it would otherwise be opened on the next pass.
+    // Opening the package dir would show up on an inotify watch held by the
+    // package's own app. Runs before the depth add: on Android <= 12 the
+    // package dir sits directly under /data/app.
     if (maybe_manager_apk_dir(dirpath)) {
         snprintf(candidate_path, DATA_PATH_LEN, "%s/base.apk", dirpath);
         strcpy(cached_manager_apk_path, candidate_path);
-        // As soon as we saw a candidate package dir, we can stop
         return FILLDIR_ACTOR_STOP;
     }
 
