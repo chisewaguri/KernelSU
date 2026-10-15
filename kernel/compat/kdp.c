@@ -4,6 +4,7 @@
 #include <linux/pid.h>
 #include <linux/rcupdate.h>
 #include <linux/sched.h>
+#include <linux/sched/coredump.h>
 #include <linux/sched/task.h>
 #include <linux/sched/user.h>
 #include <linux/user_namespace.h>
@@ -23,19 +24,20 @@ typedef unsigned int (*kdp_usecount_sub_and_test_t)(int nr, struct cred *);
 #else
 typedef unsigned int (*kdp_usecount_dec_and_test_t)(struct cred *);
 #endif
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 14, 0)
 typedef long (*inc_rlimit_ucounts_t)(struct ucounts *ucounts, unsigned int type, long value);
 typedef bool (*dec_rlimit_ucounts_t)(struct ucounts *ucounts, unsigned int type, long value);
 #endif
 
 static prepare_ro_creds_t prepare_ro_creds_fn;
 static kdp_assign_pgd_t kdp_assign_pgd_fn;
+static int *suid_dumpable_ptr;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
 static kdp_usecount_sub_and_test_t kdp_usecount_sub_and_test_fn;
 #else
 static kdp_usecount_dec_and_test_t kdp_usecount_dec_and_test_fn;
 #endif
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 14, 0)
 static inc_rlimit_ucounts_t inc_rlimit_ucounts_fn;
 static dec_rlimit_ucounts_t dec_rlimit_ucounts_fn;
 #endif
@@ -75,9 +77,20 @@ static void __nocfi kdp_commit_worker(struct work_struct *work)
         goto out;
     }
 
+    /* Match commit_creds() before making the new identity visible to ptrace. */
+    if (!uid_eq(old_cred->euid, ro_cred->euid) || !gid_eq(old_cred->egid, ro_cred->egid) ||
+        !uid_eq(old_cred->fsuid, ro_cred->fsuid) || !gid_eq(old_cred->fsgid, ro_cred->fsgid) ||
+        old_cred->user_ns != ro_cred->user_ns ||
+        !cap_issubset(ro_cred->cap_permitted, old_cred->cap_permitted)) {
+        if (cw->target->mm)
+            set_dumpable(cw->target->mm, READ_ONCE(*suid_dumpable_ptr));
+        cw->target->pdeath_signal = 0;
+        smp_wmb();
+    }
+
     user_changed = ro_cred->user != old_cred->user;
     if (user_changed) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 14, 0)
         inc_rlimit_ucounts_fn(ro_cred->ucounts, UCOUNT_RLIMIT_NPROC, 1);
 #else
         atomic_inc(&ro_cred->user->processes);
@@ -89,7 +102,7 @@ static void __nocfi kdp_commit_worker(struct work_struct *work)
     kdp_assign_pgd_fn(cw->target);
 
     if (user_changed) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 14, 0)
         dec_rlimit_ucounts_fn(old_cred->ucounts, UCOUNT_RLIMIT_NPROC, 1);
 #else
         atomic_dec(&old_cred->user->processes);
@@ -134,7 +147,7 @@ int ksu_commit_creds(struct cred *cred)
     if (!static_branch_unlikely(&ksu_kdp_key))
         return commit_creds(cred);
 
-    INIT_WORK(&cw.work, kdp_commit_worker);
+    INIT_WORK_ONSTACK(&cw.work, kdp_commit_worker);
     init_completion(&cw.completion);
     cw.target = current;
     cw.old_cred = current_real_cred();
@@ -144,20 +157,24 @@ int ksu_commit_creds(struct cred *cred)
     get_task_struct(cw.target);
     queued = schedule_work(&cw.work);
     if (!queued) {
+        destroy_work_on_stack(&cw.work);
         put_task_struct(cw.target);
         return -EBUSY;
     }
 
     wait_for_completion(&cw.completion);
+    flush_work(&cw.work);
+    destroy_work_on_stack(&cw.work);
     put_task_struct(cw.target);
     return cw.result;
 }
 
 void kdp_jb_init(void)
 {
+    suid_dumpable_ptr = (int *)find_kernel_symbol_exact("suid_dumpable");
     prepare_ro_creds_fn = (prepare_ro_creds_t)ksu_resolve_symbol_for_functable_hook("prepare_ro_creds");
     kdp_assign_pgd_fn = (kdp_assign_pgd_t)ksu_resolve_symbol_for_functable_hook("kdp_assign_pgd");
-    if (!prepare_ro_creds_fn || !kdp_assign_pgd_fn)
+    if (!suid_dumpable_ptr || !prepare_ro_creds_fn || !kdp_assign_pgd_fn)
         return;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
     kdp_usecount_sub_and_test_fn =
@@ -170,7 +187,7 @@ void kdp_jb_init(void)
     if (!kdp_usecount_dec_and_test_fn)
         return;
 #endif
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 14, 0)
     inc_rlimit_ucounts_fn = (inc_rlimit_ucounts_t)ksu_resolve_symbol_for_functable_hook("inc_rlimit_ucounts");
     dec_rlimit_ucounts_fn = (dec_rlimit_ucounts_t)ksu_resolve_symbol_for_functable_hook("dec_rlimit_ucounts");
     if (!inc_rlimit_ucounts_fn || !dec_rlimit_ucounts_fn)

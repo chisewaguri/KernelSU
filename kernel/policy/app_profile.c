@@ -208,6 +208,7 @@ int escape_with_root_profile(void)
         pr_err("ksu_commit_creds failed: %d\n", ret);
         goto out_abort_creds;
     }
+    ksu_defex_sync_current();
     disable_seccomp();
 
     if (profile->flags & FLAG_KSU_NO_NEW_PRIVS) {
