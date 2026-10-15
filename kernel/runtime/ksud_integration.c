@@ -575,7 +575,7 @@ static long ksu_sys_read(const struct pt_regs *regs)
     size_t *count_ptr = (size_t *)&PT_REGS_PARM3(regs);
 
     ksu_handle_sys_read(fd, buf_ptr, count_ptr);
-    return orig_sys_read(regs);
+    return smp_load_acquire(&orig_sys_read)(regs);
 }
 
 static long (*orig_sys_fstat)(const struct pt_regs *regs);
@@ -596,7 +596,7 @@ static long ksu_sys_fstat(const struct pt_regs *regs)
         fput(file);
     }
 
-    ret = orig_sys_fstat(regs);
+    ret = smp_load_acquire(&orig_sys_fstat)(regs);
 
     if (is_rc) {
         void __user *st_size_ptr = statbuf + offsetof(struct stat, st_size);
