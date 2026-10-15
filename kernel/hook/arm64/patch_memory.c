@@ -13,7 +13,7 @@
 #include "linux/stop_machine.h"
 #include "asm/cacheflush.h"
 #include "asm-generic/fixmap.h"
-#include "compat/jailbreak.h"
+#include "infra/symbol_resolver.h"
 
 // https://github.com/fuqiuluo/ovo/blob/f7da411458e87d32438dc14fce5a3313ed0c967e/ovo/mmuhack.c#L21
 
@@ -123,10 +123,30 @@ struct patch_text_info {
 // ^1: https://github.com/NothingOSS/android_kernel_device_modules_6.1_nothing_mt6878/blob/957dac185efe46cbf6336b0fff9516d84c8cd78f/drivers/misc/mediatek/mkp/mkp_main.c#L29
 // ^2: https://github.com/torvalds/linux/commit/c0eb315ad9719e41ce44708455cc69df7ac9f3f8
 // Runs under stop_machine; propagate errors without console output.
+// Prefer the kernel's fixmap writer when it can map the destination.
+static int (*write_literal_u64_fn)(void *addr, u64 val);
+
+void __init ksu_patch_memory_init(void)
+{
+    write_literal_u64_fn = ksu_resolve_symbol_for_functable_hook("aarch64_insn_write_literal_u64");
+}
+
 static int ksu_patch_text_nosync(void *dst, void *src, size_t len, int flags)
 {
     unsigned long p = (unsigned long)dst;
     int ret;
+
+    if (write_literal_u64_fn && len == sizeof(u64) && IS_ALIGNED(p, sizeof(u64))) {
+        if (IS_ENABLED(CONFIG_STRICT_MODULE_RWX) &&
+            (is_vmalloc_or_module_addr(dst) && vmalloc_to_page(dst))) {
+            u64 value;
+
+            memcpy(&value, src, sizeof(value));
+            ret = write_literal_u64_fn(dst, value);
+            if (!ret)
+                goto flushed;
+        }
+    }
 
     int phy_err;
     unsigned long phy = phys_from_virt(p, &phy_err);
@@ -141,6 +161,7 @@ static int ksu_patch_text_nosync(void *dst, void *src, size_t len, int flags)
 
     clear_fixmap(FIX_TEXT_POKE0);
 
+flushed:
     if (!ret) {
         if (flags & KSU_PATCH_TEXT_FLUSH_ICACHE)
             ksu_flush_icache((uintptr_t)dst, (uintptr_t)dst + len);
@@ -178,9 +199,6 @@ static int ksu_patch_text_cb(void *arg)
 int ksu_patch_text(void *dst, void *src, size_t len, int flags)
 {
     int ret;
-
-    if (static_branch_unlikely(&ksu_rkp_key) && len == sizeof(void *))
-        return ksu_rkp_branch_patch(dst, src);
 
     struct patch_text_info info = {
         .dst = dst,

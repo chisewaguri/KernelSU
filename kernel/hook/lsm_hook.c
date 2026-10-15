@@ -254,6 +254,7 @@ int ksu_lsm_hook(struct ksu_lsm_hook *hook)
         goto out_unlock;
     }
 
+    smp_store_release(&hook->original, selected_origin);
     if (ksu_lsm_hook_patch_slot(selected_slot, hook->replacement)) {
         pr_err("lsm_hook: failed to patch %s\n", hook->head_name ?: "unknown");
         ret = -EFAULT;
@@ -367,6 +368,7 @@ int ksu_lsm_hook(struct ksu_lsm_hook *hook)
 
     if (selected_origin) {
         pr_info("patch func addr\n");
+        smp_store_release(&hook->original, selected_origin);
         ret = ksu_lsm_hook_patch_slot(selected_slot, hook->replacement);
     } else {
         pr_info("patch head->first\n");
