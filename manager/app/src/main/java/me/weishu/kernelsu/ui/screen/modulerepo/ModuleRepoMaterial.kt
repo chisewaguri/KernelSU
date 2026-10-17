@@ -539,6 +539,7 @@ fun ModuleRepoDetailScreenMaterial(
                     0 -> ReadmePage(
                         state = state,
                         onRetry = actions.onRetry,
+                        contentReadyForWebView = pagerState.settledPage == page,
                         innerPadding = paddedInnerPadding,
                         scrollBehavior = scrollBehavior
                     )
@@ -546,6 +547,7 @@ fun ModuleRepoDetailScreenMaterial(
                     1 -> ReleasesPage(
                         state = state,
                         onRetry = actions.onRetry,
+                        contentReadyForWebView = pagerState.settledPage == page,
                         innerPadding = paddedInnerPadding,
                         scrollBehavior = scrollBehavior,
                         confirmTitle = confirmTitle,
@@ -643,6 +645,7 @@ private fun CachedDetailNotice(modifier: Modifier = Modifier) {
 private fun ReadmePage(
     state: ModuleRepoDetailUiState,
     onRetry: () -> Unit,
+    contentReadyForWebView: Boolean,
     innerPadding: PaddingValues,
     scrollBehavior: TopAppBarScrollBehavior
 ) {
@@ -677,7 +680,7 @@ private fun ReadmePage(
                     label = "ReadmeAlpha",
                 )
                 Box {
-                    if (isReady) {
+                    if (isReady && contentReadyForWebView) {
                         Box(modifier = Modifier.graphicsLayer { this.alpha = alpha }) {
                             GithubMarkdown(
                                 content = readmeHtml,
@@ -730,6 +733,7 @@ private fun ReadmePage(
 fun ReleasesPage(
     state: ModuleRepoDetailUiState,
     onRetry: () -> Unit,
+    contentReadyForWebView: Boolean,
     innerPadding: PaddingValues,
     scrollBehavior: TopAppBarScrollBehavior,
     confirmTitle: String,
@@ -805,7 +809,7 @@ fun ReleasesPage(
                                         .padding(horizontal = 16.dp, vertical = 12.dp)
                                         .animateContentSize(animationSpec = tween(durationMillis = 300)),
                                 ) {
-                                    if (descReady) {
+                                    if (descReady && contentReadyForWebView) {
                                         Box(modifier = Modifier.graphicsLayer { this.alpha = descAlpha }) {
                                             GithubMarkdown(
                                                 content = changelog,
