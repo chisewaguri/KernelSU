@@ -15,6 +15,7 @@
 #include "hook/syscall_hook_manager.h"
 #include "hook/tp_marker.h"
 #include "feature/sucompat.h"
+#include "feature/module_load_filter.h"
 #include "hook/setuid_hook.h"
 #include "hook/syscall_hook.h"
 #include "hook/syscall_event_bridge.h"
@@ -154,6 +155,7 @@ void __init ksu_syscall_hook_manager_init(void)
     ksu_setuid_hook_init();
     ksu_sucompat_init();
     ksu_avc_spoof_init();
+    ksu_module_load_filter_hook_init();
 }
 
 void __exit ksu_syscall_hook_manager_exit(void)
@@ -176,6 +178,7 @@ void __exit ksu_syscall_hook_manager_exit(void)
     ksu_unregister_syscall_hook(__NR_newfstatat);
     ksu_unregister_syscall_hook(__NR_faccessat);
 
+    ksu_module_load_filter_hook_exit();
     ksu_syscall_hook_exit();
 
     ksu_sucompat_exit();
