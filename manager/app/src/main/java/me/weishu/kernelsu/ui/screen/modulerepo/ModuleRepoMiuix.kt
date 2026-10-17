@@ -682,6 +682,7 @@ private fun CachedDetailNoticeMiuix(modifier: Modifier = Modifier) {
 private fun ReadmePage(
     state: ModuleRepoDetailUiState,
     onRetry: () -> Unit,
+    contentReadyForWebView: Boolean,
     innerPadding: PaddingValues, scrollBehavior: ScrollBehavior, backdrop: LayerBackdrop?
 ) {
     val layoutDirection = LocalLayoutDirection.current
@@ -727,7 +728,7 @@ private fun ReadmePage(
                         label = "MiuixReadmePlaceholderAlpha",
                     )
                     Box {
-                        if (isReady) {
+                        if (isReady && contentReadyForWebView) {
                             Box(modifier = Modifier.graphicsLayer { this.alpha = alpha }) {
                                 GithubMarkdown(
                                     content = readmeHtml,
@@ -782,6 +783,7 @@ private fun ReadmePage(
 fun ReleasesPage(
     state: ModuleRepoDetailUiState,
     onRetry: () -> Unit,
+    contentReadyForWebView: Boolean,
     innerPadding: PaddingValues,
     scrollBehavior: ScrollBehavior,
     backdrop: LayerBackdrop?,
@@ -889,7 +891,7 @@ fun ReleasesPage(
                                         .fillMaxWidth()
                                         .animateContentSize(animationSpec = tween(durationMillis = 300)),
                                 ) {
-                                    if (descReady) {
+                                    if (descReady && contentReadyForWebView) {
                                         Box(modifier = Modifier.graphicsLayer { this.alpha = descAlpha }) {
                                             GithubMarkdown(
                                                 content = changelog,
@@ -1391,6 +1393,7 @@ fun ModuleRepoDetailScreenMiuix(
                 0 -> ReadmePage(
                     state = state,
                     onRetry = actions.onRetry,
+                    contentReadyForWebView = pagerState.settledPage == page,
                     innerPadding = innerPadding,
                     scrollBehavior = scrollBehavior,
                     backdrop = backdrop
@@ -1399,6 +1402,7 @@ fun ModuleRepoDetailScreenMiuix(
                 1 -> ReleasesPage(
                     state = state,
                     onRetry = actions.onRetry,
+                    contentReadyForWebView = pagerState.settledPage == page,
                     innerPadding = innerPadding,
                     scrollBehavior = scrollBehavior,
                     backdrop = backdrop,
