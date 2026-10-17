@@ -139,6 +139,16 @@ bool is_late_load_mode() {
     return false;
 }
 
+bool is_boot_completed() {
+    // Not cached like get_info(): the flag changes after the manager may have
+    // started. Kernels before UAPI 7 never set it, so treat them as booted.
+    struct ksu_get_info_cmd info = {};
+    if (ksuctl(KSU_IOCTL_GET_INFO, &info) < 0 || info.uapi_version < 7) {
+        return true;
+    }
+    return (info.flags & KSU_GET_INFO_FLAG_BOOT_COMPLETED) != 0;
+}
+
 bool is_manager() {
     auto info = get_info();
     if (info.version > 0) {

@@ -69,6 +69,9 @@ static int do_get_info(void __user *arg)
     if (ksu_preinit_enabled_param() && !ksu_late_loaded) {
         cmd.flags |= KSU_GET_INFO_FLAG_PREINIT;
     }
+    if (ksu_boot_completed) {
+        cmd.flags |= KSU_GET_INFO_FLAG_BOOT_COMPLETED;
+    }
 #if KSU_IS_PR_BUILD
     cmd.flags |= KSU_GET_INFO_FLAG_PR_BUILD;
 #endif

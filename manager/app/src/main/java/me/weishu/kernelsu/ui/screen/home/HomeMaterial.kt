@@ -107,6 +107,12 @@ fun HomePagerMaterial(
             } else if (state.showKernelPrBuildWarning) {
                 WarningCard(stringResource(id = R.string.home_pr_kernel_warning), level = WarningLevel.Notice)
             }
+            if (state.showKsudWarning) {
+                WarningCard(
+                    message = stringResource(id = R.string.home_ksud_not_loaded_warning),
+                    onClick = actions.onKsudWarningClick,
+                )
+            }
             if (state.showGkiWarning) {
                 WarningCard(stringResource(id = R.string.home_gki_warning), level = WarningLevel.Notice)
             }
@@ -834,6 +840,7 @@ private fun previewHomeScreenState(
     isRootAvailable = ksuVersion != null,
     isSafeMode = isSafeMode,
     isLateLoadMode = isLateLoadMode,
+    isBootCompleted = true,
     checkUpdateEnabled = false,
     latestVersionInfo = me.weishu.kernelsu.ui.util.module.LatestVersionInfo(),
     currentManagerVersionCode = 10000,
