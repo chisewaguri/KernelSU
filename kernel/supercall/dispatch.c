@@ -17,6 +17,7 @@
 #include "runtime/ksud_boot.h"
 #include "feature/kernel_umount.h"
 #include "manager/manager_identity.h"
+#include "manager/throne_tracker.h"
 #include "selinux/selinux.h"
 #include "infra/file_wrapper.h"
 #include "hook/tp_marker.h"
@@ -869,6 +870,18 @@ out:
     return ret;
 }
 
+static int do_manager_config(void __user *arg)
+{
+    struct ksu_manager_config_cmd cmd;
+
+    if (copy_from_user(&cmd, arg, sizeof(cmd)))
+        return -EFAULT;
+    ksu_handle_manager_config(cmd.operation, &cmd);
+    if (cmd.result)
+        return cmd.result;
+    return copy_to_user(arg, &cmd, sizeof(cmd)) ? -EFAULT : 0;
+}
+
 // IOCTL handlers mapping table
 // clang-format off
 static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
@@ -1022,6 +1035,12 @@ static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
         .cmd = KSU_IOCTL_LOOKUP_SYMBOLS,
         .name = "LOOKUP_SYMBOLS",
         .handler = do_lookup_symbols,
+        .perm_check = only_root
+    },
+    {
+        .cmd = KSU_IOCTL_MANAGER_CONFIG,
+        .name = "MANAGER_CONFIG",
+        .handler = do_manager_config,
         .perm_check = only_root
     },
     {
