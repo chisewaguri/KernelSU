@@ -14,6 +14,11 @@ pub fn on_post_fs_data() -> Result<()> {
         return Ok(());
     }
 
+    let safe_mode = crate::utils::is_safe_mode();
+    if let Err(e) = crate::manager::reapply(safe_mode) {
+        warn!("apply saved manager failed: {e:#}");
+    }
+
     ksucalls::report_post_fs_data();
 
     utils::umask(0);
@@ -31,7 +36,6 @@ pub fn on_post_fs_data() -> Result<()> {
         return Ok(());
     }
 
-    let safe_mode = crate::utils::is_safe_mode();
     let wait = ScriptWait::Until(Instant::now() + defs::BOOT_STAGE_TIMEOUT);
 
     if safe_mode {

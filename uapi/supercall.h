@@ -17,6 +17,28 @@ static const __u32 KERNEL_SU_UAPI_VERSION = 6;
 static const __u32 KSU_INSTALL_MAGIC1 = 0xDEADBEEF;
 static const __u32 KSU_INSTALL_MAGIC2 = 0xCAFEBABE;
 
+static const __u32 KSU_MANAGER_CONFIG_GET = 0;
+static const __u32 KSU_MANAGER_CONFIG_SET = 1;
+static const __u32 KSU_MANAGER_CONFIG_RESET = 2;
+
+struct ksu_manager_config {
+    char package[KSU_MAX_PACKAGE_NAME];
+    char certificate_hash[65];
+    __u8 strict;
+    __u8 reserved[2];
+    __u32 certificate_size;
+};
+
+struct ksu_manager_config_cmd {
+    struct ksu_manager_config config;
+    struct ksu_manager_config default_config;
+    __s32 result;
+    __u32 manager_appid;
+    __u32 installed;
+    __u32 matches;
+    __u32 operation;
+};
+
 struct ksu_become_daemon_cmd {
     __u8 token[65]; /* Input: daemon token (null-terminated) */
 };
@@ -205,5 +227,6 @@ static const __u32 KSU_IOCTL_SET_INIT_PGRP = _IO('K', 19);
 static const __u32 KSU_IOCTL_GET_SULOG_FD = _IOW('K', 20, struct ksu_get_sulog_fd_cmd);
 static const __u32 KSU_IOCTL_DISABLE_ESCAPE_TO_ROOT = _IO('K', 21);
 static const __u32 KSU_IOCTL_LOOKUP_SYMBOLS = _IOW('K', 22, struct ksu_lookup_symbols_cmd);
+static const __u32 KSU_IOCTL_MANAGER_CONFIG = _IOWR('K', 23, struct ksu_manager_config_cmd);
 
 #endif

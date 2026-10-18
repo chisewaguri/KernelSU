@@ -29,6 +29,12 @@ enum Commands {
         command: Module,
     },
 
+    /// Select the trusted manager app
+    Manager {
+        #[command(subcommand)]
+        command: Manager,
+    },
+
     /// Trigger `post-fs-data` event
     PostFsData,
 
@@ -153,6 +159,24 @@ enum Commands {
         #[command(subcommand)]
         command: Initrc,
     },
+}
+
+#[derive(clap::Subcommand, Debug)]
+enum Manager {
+    /// Save and apply the manager package and signing certificate
+    Set {
+        package: String,
+        /// Read the trusted certificate from this APK
+        #[arg(long)]
+        apk: Option<PathBuf>,
+        /// Disable fallback to the built-in manager
+        #[arg(long)]
+        strict: bool,
+    },
+    /// Show the current manager identity and installation status
+    Get,
+    /// Restore the built-in manager and remove the saved setting
+    Reset,
 }
 
 #[derive(clap::Subcommand, Debug)]
@@ -528,6 +552,15 @@ pub fn run() -> Result<()> {
     log::info!("command: {:?}", cli.command);
 
     let result = match cli.command {
+        Commands::Manager { command } => match command {
+            Manager::Set {
+                package,
+                apk,
+                strict,
+            } => crate::manager::set(package, apk.as_deref(), strict),
+            Manager::Get => crate::manager::get(),
+            Manager::Reset => crate::manager::reset(),
+        },
         Commands::PostFsData => init_event::on_post_fs_data(),
         Commands::BootCompleted => {
             init_event::on_boot_completed();
