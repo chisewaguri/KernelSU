@@ -198,7 +198,7 @@ int ksu_rkp_branch_patch(void **slot, void *replacement, void **callthrough)
             ret = -EBUSY;
             goto out;
         }
-        /* ponytail: stubs pin the module, add call-through quiescence before allowing unload. */
+        /* Callers may still be inside the stub after restore, so stay loaded. */
         site->pinned = true;
     }
     if (callthrough)
