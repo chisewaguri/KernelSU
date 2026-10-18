@@ -336,6 +336,11 @@ void __init ksu_module_load_filter_hook_init(void)
         pr_warn("module_load_filter: syscall table unavailable\n");
         return;
     }
+    /* Handlers can sleep in kernel_read() and unhook does not wait for them, so stay loaded. */
+    if (!try_module_get(THIS_MODULE)) {
+        pr_warn("module_load_filter: cannot pin module\n");
+        return;
+    }
 
     ksu_syscall_table_hook(__NR_init_module, (syscall_fn_t)ksu_sys_init_module, &orig_sys_init_module);
     ksu_syscall_table_hook(__NR_finit_module, (syscall_fn_t)ksu_sys_finit_module, &orig_sys_finit_module);
