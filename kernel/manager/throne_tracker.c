@@ -18,6 +18,21 @@
 
 static DEFINE_MUTEX(throne_tracker_mutex);
 
+static const struct ksu_manager_config default_manager = {
+    .package = KSU_PACKAGE_NAME,
+    .certificate_hash = EXPECTED_HASH,
+    .certificate_size = EXPECTED_SIZE,
+};
+
+static struct ksu_manager_config manager_config = {
+    .package = KSU_PACKAGE_NAME,
+    .certificate_hash = EXPECTED_HASH,
+    .certificate_size = EXPECTED_SIZE,
+};
+
+static char selected_package[KSU_MAX_PACKAGE_NAME] = KSU_PACKAGE_NAME;
+static bool configured_manager_installed;
+
 uid_t ksu_manager_appid = KSU_INVALID_APPID;
 
 #define DATA_PATH_LEN 384 // 384 is enough for /data/app/<package>/base.apk
@@ -32,13 +47,13 @@ struct uid_data {
     char package[KSU_MAX_PACKAGE_NAME];
 };
 
-static void crown_manager(const char *apk, struct list_head *uid_data)
+static void crown_manager(const char *package, struct list_head *uid_data)
 {
     struct list_head *list = (struct list_head *)uid_data;
     struct uid_data *np;
 
     list_for_each_entry (np, list, list) {
-        if (strncmp(np->package, KSU_PACKAGE_NAME, KSU_MAX_PACKAGE_NAME) == 0) {
+        if (strncmp(np->package, package, KSU_MAX_PACKAGE_NAME) == 0) {
             pr_info("Crowning manager: uid=%d\n", np->uid);
             ksu_set_manager_appid(np->uid);
             break;
@@ -58,6 +73,7 @@ struct my_dir_context {
     char *parent_dir;
     void *private_data;
     int depth;
+    const struct ksu_manager_config *config;
 };
 // https://docs.kernel.org/filesystems/porting.html
 // filldir_t (readdir callbacks) calling conventions have changed. Instead of returning 0 or -E... it returns bool now. false means "no more" (as -E... used to) and true - "keep going" (as 0 in old calling conventions). Rationale: callers never looked at specific -E... values anyway. -> iterate_shared() instances require no changes at all, all filldir_t ones in the tree converted.
@@ -71,7 +87,7 @@ struct my_dir_context {
 #define FILLDIR_ACTOR_STOP -EINVAL
 #endif
 
-static bool maybe_manager_apk_dir(const char *path)
+static bool maybe_manager_apk_dir(const char *path, const char *package)
 {
     _Static_assert(sizeof(KSU_PACKAGE_NAME) < KSU_MAX_PACKAGE_NAME, "KSU_PACKAGE_NAME too long!");
     char pkg[KSU_MAX_PACKAGE_NAME];
@@ -81,7 +97,7 @@ static bool maybe_manager_apk_dir(const char *path)
     }
 
     // pkg is `<real package>`
-    return strncmp(pkg, KSU_PACKAGE_NAME, sizeof(KSU_PACKAGE_NAME)) == 0;
+    return strcmp(pkg, package) == 0;
 }
 
 static FILLDIR_RETURN_TYPE my_actor(struct dir_context *ctx, const char *name, int namelen, loff_t off, u64 ino,
@@ -113,9 +129,8 @@ static FILLDIR_RETURN_TYPE my_actor(struct dir_context *ctx, const char *name, i
     // Opening the package dir would show up on an inotify watch held by the
     // package's own app. Runs before the depth add: on Android <= 12 the
     // package dir sits directly under /data/app.
-    if (maybe_manager_apk_dir(dirpath)) {
+    if (maybe_manager_apk_dir(dirpath, my_ctx->config->package)) {
         snprintf(candidate_path, DATA_PATH_LEN, "%s/base.apk", dirpath);
-        strcpy(cached_manager_apk_path, candidate_path);
         return FILLDIR_ACTOR_STOP;
     }
 
@@ -135,7 +150,8 @@ static FILLDIR_RETURN_TYPE my_actor(struct dir_context *ctx, const char *name, i
     return FILLDIR_ACTOR_CONTINUE;
 }
 
-static void search_manager(const char *path, int depth, struct list_head *uid_data)
+static void search_manager(const char *path, int depth, struct list_head *uid_data,
+                           const struct ksu_manager_config *config)
 {
     int i, stop = 0;
     struct list_head data_path_list;
@@ -162,7 +178,8 @@ static void search_manager(const char *path, int depth, struct list_head *uid_da
                                           .data_path_list = &data_path_list,
                                           .parent_dir = pos->dirpath,
                                           .private_data = candidate_path,
-                                          .depth = pos->depth };
+                                          .depth = pos->depth,
+                                          .config = config };
             struct file *file = ksu_filp_open_nonotify(pos->dirpath, O_RDONLY | O_NOFOLLOW | O_NOATIME | O_DIRECTORY);
             if (IS_ERR(file)) {
                 pr_err("Failed to open directory: %s, err: %ld\n", pos->dirpath, PTR_ERR(file));
@@ -196,14 +213,15 @@ static void search_manager(const char *path, int depth, struct list_head *uid_da
             // As soon as we get the manager apk path, we can stop
             stop = 1;
 
-            bool is_manager = is_manager_apk(candidate_path);
+            bool is_manager = is_manager_apk(candidate_path, config->certificate_size, config->certificate_hash);
             pr_info("Found manager base.apk at path: %s, is_manager: %d\n", candidate_path, is_manager);
 
             // Only crown if signature verification pass
             if (unlikely(!is_manager))
                 goto skip_iterate;
 
-            crown_manager(candidate_path, uid_data);
+            strcpy(cached_manager_apk_path, candidate_path);
+            crown_manager(config->package, uid_data);
 
         skip_iterate:
             list_del(&pos->list);
@@ -228,9 +246,8 @@ static bool is_uid_exist(uid_t uid, char *package, void *data)
     return exist;
 }
 
-void track_throne(bool prune_only)
+static void track_throne_locked(bool prune_only)
 {
-    mutex_lock(&throne_tracker_mutex);
     const struct cred *old_cred = override_creds(ksu_cred);
     struct file *fp = filp_open(SYSTEM_PACKAGES_LIST_PATH, O_RDONLY, 0);
     if (IS_ERR(fp)) {
@@ -295,11 +312,28 @@ void track_throne(bool prune_only)
     if (prune_only)
         goto prune;
 
+    const struct ksu_manager_config *config = &manager_config;
+    configured_manager_installed = false;
+    list_for_each_entry (np, &uid_list, list) {
+        if (!strcmp(np->package, manager_config.package)) {
+            configured_manager_installed = true;
+            break;
+        }
+    }
+    if (!configured_manager_installed && !manager_config.strict)
+        config = &default_manager;
+
+    if (strcmp(selected_package, config->package)) {
+        strscpy(selected_package, config->package, sizeof(selected_package));
+        cached_manager_apk_path[0] = 0;
+        ksu_invalidate_manager_uid();
+    }
+
     // first, check if manager_uid exist!
     uid_t manager_package_uid = KSU_INVALID_APPID;
     bool need_rescan = false;
     list_for_each_entry (np, &uid_list, list) {
-        if (strcmp(np->package, KSU_PACKAGE_NAME) == 0) {
+        if (strcmp(np->package, config->package) == 0) {
             manager_package_uid = np->uid;
             break;
         }
@@ -341,8 +375,8 @@ void track_throne(bool prune_only)
                 pr_err("stat cached manager path failed: %d (path=%s)\n", ret, cached_manager_apk_path);
             }
         }
-        pr_info("Searching manager " KSU_PACKAGE_NAME "...\n");
-        search_manager("/data/app", 2, &uid_list);
+        pr_info("Searching manager %s...\n", config->package);
+        search_manager("/data/app", 2, &uid_list, config);
         pr_info("Search manager finished\n");
     }
 
@@ -357,6 +391,73 @@ out:
     }
 out_revert_cred:
     revert_creds(old_cred);
+}
+
+void track_throne(bool prune_only)
+{
+    mutex_lock(&throne_tracker_mutex);
+    track_throne_locked(prune_only);
+    mutex_unlock(&throne_tracker_mutex);
+}
+
+static bool valid_manager_config(const struct ksu_manager_config *config)
+{
+    size_t i, length = strnlen(config->package, sizeof(config->package));
+    bool first = true, has_dot = false;
+
+    if (!length || length == sizeof(config->package) || config->strict > 1 || !config->certificate_size ||
+        config->certificate_size > 1024 || strnlen(config->certificate_hash, sizeof(config->certificate_hash)) != 64)
+        return false;
+
+    for (i = 0; i < length; i++) {
+        char c = config->package[i];
+        bool letter = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+
+        if (first && !letter)
+            return false;
+        if (c == '.') {
+            first = true;
+            has_dot = true;
+        } else {
+            if (!letter && !(c >= '0' && c <= '9') && c != '_')
+                return false;
+            first = false;
+        }
+    }
+    if (first || !has_dot)
+        return false;
+
+    for (i = 0; i < 64; i++) {
+        char c = config->certificate_hash[i];
+
+        if (!(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f'))
+            return false;
+    }
+    return true;
+}
+
+void ksu_handle_manager_config(unsigned int operation, struct ksu_manager_config_cmd *cmd)
+{
+    cmd->result = -EINVAL;
+    if (operation > KSU_MANAGER_CONFIG_RESET ||
+        (operation == KSU_MANAGER_CONFIG_SET && !valid_manager_config(&cmd->config)))
+        return;
+
+    mutex_lock(&throne_tracker_mutex);
+    if (operation != KSU_MANAGER_CONFIG_GET) {
+        manager_config = operation == KSU_MANAGER_CONFIG_RESET ? default_manager : cmd->config;
+        cached_manager_apk_path[0] = 0;
+        ksu_invalidate_manager_uid();
+    }
+    configured_manager_installed = false;
+    track_throne_locked(false);
+    cmd->config = manager_config;
+    cmd->default_config = default_manager;
+    cmd->manager_appid = ksu_get_manager_appid();
+    cmd->installed = configured_manager_installed;
+    cmd->matches = configured_manager_installed && ksu_is_manager_appid_valid() &&
+                   !strcmp(selected_package, manager_config.package);
+    cmd->result = 0;
     mutex_unlock(&throne_tracker_mutex);
 }
 
