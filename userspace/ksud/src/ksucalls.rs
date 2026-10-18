@@ -156,6 +156,22 @@ fn ksuctl<T>(request: u32, arg: *mut T) -> Result<i32> {
 }
 
 // API implementations
+pub fn manager_config(
+    operation: u32,
+    request: &mut ksu_uapi::ksu_manager_config_cmd,
+) -> Result<()> {
+    request.result = -libc::EOPNOTSUPP;
+    request.operation = operation;
+    ksuctl(ksu_uapi::KSU_IOCTL_MANAGER_CONFIG, request)?;
+    if request.result != 0 {
+        bail!(
+            "Manager configuration failed: {}",
+            io::Error::from_raw_os_error(-request.result)
+        );
+    }
+    Ok(())
+}
+
 pub fn get_info() -> ksu_uapi::ksu_get_info_cmd {
     *INFO_CACHE.get_or_init(|| {
         let mut cmd = ksu_uapi::ksu_get_info_cmd {
