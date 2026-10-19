@@ -94,10 +94,15 @@ static write_op_fn callthru_context_write, callthru_access_write;
 #define ksu_task_security_struct cred_security_struct
 #endif
 
+static bool selinux_hide_applies_to_uid(uid_t uid)
+{
+    return uid == 2000 || uid >= 10000;
+}
+
 static ssize_t __nocfi my_write_context(struct file *file, char *buf, size_t size)
 {
-    // apply to all app uids
-    if (likely(current_uid().val < 10000)) {
+    // apply to app and shell uids
+    if (likely(!selinux_hide_applies_to_uid(current_uid().val))) {
         return smp_load_acquire(&callthru_context_write)(file, buf, size);
     }
     char *canon = NULL;
@@ -134,8 +139,8 @@ out:
 
 static ssize_t __nocfi my_write_access(struct file *file, char *buf, size_t size)
 {
-    // apply to all app uids
-    if (likely(current_uid().val < 10000)) {
+    // apply to app and shell uids
+    if (likely(!selinux_hide_applies_to_uid(current_uid().val))) {
         return smp_load_acquire(&callthru_access_write)(file, buf, size);
     }
     char *scon = NULL, *tcon = NULL;
@@ -233,7 +238,7 @@ static u32 ptrace_parent_sid(void)
 typedef int (*setprocattr_fn)(const char *name, void *value, size_t size);
 static int __nocfi my_setprocattr(const char *name, void *value, size_t size)
 {
-    if (likely(current_uid().val < 10000)) {
+    if (likely(!selinux_hide_applies_to_uid(current_uid().val))) {
         goto call_orig;
     }
 
@@ -368,7 +373,7 @@ static sel_open_handle_status_fn orig_sel_open_handle_status, *sel_open_handle_s
 static sel_open_handle_status_fn callthru_sel_open_handle_status;
 static int __nocfi my_sel_open_handle_status(struct inode *inode, struct file *filp)
 {
-    if (likely(current_uid().val >= 10000 && ksu_selinux_hide_enabled)) {
+    if (likely(selinux_hide_applies_to_uid(current_uid().val) && ksu_selinux_hide_enabled)) {
         void *data;
         mutex_lock(&selinux_state.status_lock);
         data = fake_status;
