@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Config {
     package: String,
@@ -62,18 +64,27 @@ impl Config {
     }
 }
 
+fn base_apk_path(pm_path_output: &str) -> Option<PathBuf> {
+    pm_path_output
+        .lines()
+        .filter_map(|line| line.strip_prefix("package:"))
+        .map(PathBuf::from)
+        .find(|path| path.file_name().is_some_and(|name| name == "base.apk"))
+}
+
 #[cfg(target_os = "android")]
 pub use android::{get, reapply, reset, set};
 
 #[cfg(target_os = "android")]
 mod android {
-    use super::Config;
+    use super::{Config, base_apk_path};
     use crate::{apk_sign, defs, ksu_uapi, ksucalls};
     use anyhow::{Context, Result, anyhow, ensure};
     use std::fs::{self, File};
     use std::io::{ErrorKind, Write};
     use std::os::fd::AsRawFd;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
 
     const CONFIG_PATH: &str = const_format::concatcp!(defs::WORKING_DIR, "manager");
 
@@ -182,17 +193,35 @@ mod android {
         print_status(&current()?)
     }
 
+    fn installed_apk(package: &str) -> Result<Option<PathBuf>> {
+        let output = Command::new("pm").args(["path", package]).output()?;
+        Ok(base_apk_path(&String::from_utf8(output.stdout)?))
+    }
+
+    fn signature_of(apk: &Path) -> Result<(u32, String)> {
+        apk_sign::get_apk_signature(apk.to_str().context("APK path must be UTF-8")?)
+    }
+
     pub fn set(package: String, apk: Option<&Path>, strict: bool) -> Result<()> {
         let dir = lock()?;
         let request = current()?;
         let previous = from_kernel(&request.config)?;
         let mut config = from_kernel(&request.default_config)?;
+        if let Some(installed) = installed_apk(&package)? {
+            let signature = signature_of(&installed)?;
+            if let Some(apk) = apk {
+                ensure!(
+                    signature == signature_of(apk)?,
+                    "{} does not match the certificate of the installed {package}",
+                    apk.display()
+                );
+            }
+            (config.certificate_size, config.certificate_hash) = signature;
+        } else if let Some(apk) = apk {
+            (config.certificate_size, config.certificate_hash) = signature_of(apk)?;
+        }
         config.package = package;
         config.strict = strict;
-        if let Some(apk) = apk {
-            let apk = apk.to_str().context("APK path must be UTF-8")?;
-            (config.certificate_size, config.certificate_hash) = apk_sign::get_apk_signature(apk)?;
-        }
         save_and_apply(&config, &previous)?;
         dir.sync_all()?;
         print_status(&current()?)
@@ -234,7 +263,8 @@ mod android {
 
 #[cfg(test)]
 mod tests {
-    use super::Config;
+    use super::{Config, base_apk_path};
+    use std::path::PathBuf;
 
     fn example_config() -> Config {
         Config {
@@ -276,6 +306,20 @@ mod tests {
             config.certificate_hash = hash;
             assert!(config.validate().is_err());
         }
+    }
+
+    #[test]
+    fn picks_the_base_apk_from_pm_path() {
+        let output = "package:/data/app/~~abc==/com.example-xyz==/base.apk\n\
+                      package:/data/app/~~abc==/com.example-xyz==/split_config.arm64_v8a.apk\n";
+        assert_eq!(
+            base_apk_path(output),
+            Some(PathBuf::from(
+                "/data/app/~~abc==/com.example-xyz==/base.apk"
+            ))
+        );
+        assert_eq!(base_apk_path(""), None);
+        assert_eq!(base_apk_path("package:/data/app/x/split_a.apk"), None);
     }
 
     #[test]

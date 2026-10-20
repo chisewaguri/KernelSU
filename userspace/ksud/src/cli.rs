@@ -166,7 +166,7 @@ enum Manager {
     /// Save and apply the manager package and signing certificate
     Set {
         package: String,
-        /// Read the trusted certificate from this APK
+        /// Trust the certificate of this APK instead of the installed one
         #[arg(long)]
         apk: Option<PathBuf>,
         /// Disable fallback to the built-in manager
