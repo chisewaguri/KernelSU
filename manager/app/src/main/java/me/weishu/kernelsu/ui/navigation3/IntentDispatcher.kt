@@ -100,6 +100,8 @@ fun getDisplayName(uri: Uri): String {
     return uri.getFileName(ksuApp) ?: uri.lastPathSegment ?: "Unknown"
 }
 
+private val ZIP_MIME_TYPES = setOf("application/zip", "application/x-zip-compressed", "application/x-zip")
+
 /**
  * Resolve an intent snapshot into a [PendingAction].
  * Returns null if the intent carries no recognized action.
@@ -121,7 +123,7 @@ private fun resolveIntent(intent: Intent): PendingAction? {
 
     // File manager: open ZIP
     val viewUri = intent.data
-    if (viewUri != null && viewUri.scheme == "content" && intent.type == "application/zip") {
+    if (viewUri != null && viewUri.scheme == "content" && intent.type in ZIP_MIME_TYPES) {
         val component = intent.component?.className
         val isAnyKernel = component?.endsWith("FlashAnyKernel") == true
         return PendingAction.InstallModule(
