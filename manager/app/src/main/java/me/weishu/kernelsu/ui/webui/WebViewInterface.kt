@@ -40,6 +40,7 @@ import me.weishu.kernelsu.ui.util.resolveDownloadMimeType
 import me.weishu.kernelsu.ui.util.withNewRootShell
 import me.weishu.kernelsu.ui.webui.file.KsuIO
 import me.weishu.kernelsu.ui.webui.pm.KsuPm
+import me.weishu.kernelsu.ui.webui.pm.webUIApps
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
