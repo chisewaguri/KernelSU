@@ -3,15 +3,22 @@ package me.weishu.kernelsu.ui.webui.pm
 import android.content.pm.ApplicationInfo
 import android.webkit.JavascriptInterface
 import androidx.core.content.pm.PackageInfoCompat
+import kotlinx.coroutines.runBlocking
 import me.weishu.kernelsu.data.model.AppInfo
 import me.weishu.kernelsu.ui.viewmodel.SuperUserViewModel
 import org.json.JSONArray
 import org.json.JSONObject
 
+// Loaded on first use so pages that never read packages don't wait for the scan. Callers run
+// on the JS bridge thread or a WebView request thread, never the main thread.
+internal fun webUIApps(): List<AppInfo> = runBlocking {
+    SuperUserViewModel.loadApps(useCache = true).getOrNull()?.first.orEmpty()
+}
+
 object KsuPm {
     @JavascriptInterface
     fun listPackages(type: String): String {
-        val packageNames = SuperUserViewModel.apps
+        val packageNames = webUIApps()
             .filter { appInfo ->
                 if (appInfo.special) return@filter false
                 val flags = appInfo.packageInfo.applicationInfo?.flags ?: 0
@@ -35,7 +42,7 @@ object KsuPm {
     @JavascriptInterface
     fun getPackagesInfo(packageNamesJson: String): String {
         val packageNames = JSONArray(packageNamesJson)
-        val appsByPackage = SuperUserViewModel.apps
+        val appsByPackage = webUIApps()
             .filterNot { it.special }
             .groupBy { it.packageName }
         val jsonArray = JSONArray()
