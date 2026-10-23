@@ -268,10 +268,6 @@ bool __ksu_is_allow_uid(uid_t uid)
         return true;
     }
 
-    if (unlikely(allow_shell) && uid == SHELL_UID) {
-        return true;
-    }
-
     rcu_read_lock();
     hash_for_each_possible_rcu (allow_list, p, list, uid) {
         if (uid == p->profile.curr_uid && p->profile.allow_su) {
@@ -353,10 +349,6 @@ struct root_profile *ksu_get_root_profile(uid_t uid)
 
     rcu_read_lock();
     if (is_uid_manager(uid)) {
-        goto use_default;
-    }
-
-    if (unlikely(allow_shell && uid == SHELL_UID)) {
         goto use_default;
     }
 
@@ -563,6 +555,9 @@ void ksu_load_allow_list()
 
         migrate_profile(version, &profile);
 
+        if (allow_shell && profile.curr_uid == SHELL_UID && !profile.allow_su)
+            continue;
+
         pr_info("load_allow_uid, name: %s, uid: %d, allow: %d\n", profile.key, profile.curr_uid, profile.allow_su);
         ksu_set_app_profile(&profile);
     }
@@ -614,6 +609,22 @@ void ksu_prune_allowlist(bool (*is_uid_valid)(uid_t, char *, void *), void *data
 void __init ksu_allowlist_init(void)
 {
     init_default_profiles();
+
+    if (allow_shell) {
+        struct app_profile profile = {
+            .version = KSU_APP_PROFILE_VER,
+            .key = "com.android.shell",
+            .curr_uid = SHELL_UID,
+            .allow_su = true,
+            .rp_config = {
+                .use_default = true,
+                .profile = default_root_profile,
+            },
+        };
+        int ret = ksu_set_app_profile(&profile);
+        if (ret)
+            pr_err("Failed to grant shell root: %d\n", ret);
+    }
 }
 
 void __exit ksu_allowlist_exit(void)
