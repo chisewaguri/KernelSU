@@ -4,7 +4,7 @@ use crate::{
     assets, defs, ksucalls, metamodule, restorecon,
     utils::{self},
 };
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use log::{error, info, warn};
 use std::{path::Path, time::Instant};
 
@@ -185,11 +185,26 @@ pub fn on_boot_completed() {
     }
 
     ksucalls::report_boot_complete();
+    if let Err(e) = write_last_success_boot_id() {
+        warn!("failed to write last successful boot id: {e:#}");
+    }
     info!("on_boot_completed triggered!");
 
     crate::preinit::on_boot_completed();
 
     run_stage("boot-completed", ScriptWait::NoWait);
+}
+
+pub fn write_last_success_boot_id() -> Result<()> {
+    let boot_id = std::fs::read_to_string("/proc/sys/kernel/random/boot_id")
+        .context("failed to read boot_id")?
+        .trim()
+        .to_owned();
+    if boot_id.is_empty() {
+        bail!("boot_id is empty");
+    }
+    std::fs::write(defs::LAST_SUCCESS_BOOT_ID_PATH, boot_id)
+        .with_context(|| format!("failed to write {}", defs::LAST_SUCCESS_BOOT_ID_PATH))
 }
 
 fn catch_bootlog(logname: &str, command: &[&str]) -> Result<()> {

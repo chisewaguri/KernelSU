@@ -14,6 +14,7 @@ import com.topjohnwu.superuser.CallbackList
 import com.topjohnwu.superuser.Shell
 import com.topjohnwu.superuser.ShellUtils
 import com.topjohnwu.superuser.io.SuFile
+import com.topjohnwu.superuser.io.SuFileInputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.parcelize.Parcelize
@@ -683,6 +684,21 @@ fun flashAnyKernelZip(
 fun rootAvailable(): Boolean {
     val shell = getRootShell()
     return shell.isRoot
+}
+
+private fun readRootFile(path: String): String? {
+    val file = SuFile(path).apply { shell = getRootShell() }
+    return runCatching {
+        SuFileInputStream.open(file).use { input ->
+            input.bufferedReader().readText().trim()
+        }
+    }.getOrNull()?.takeIf { it.isNotEmpty() }
+}
+
+fun isLastSuccessfulBoot(): Boolean {
+    val currentBootId = readRootFile("/proc/sys/kernel/random/boot_id") ?: return false
+    val lastSuccessBootId = readRootFile("/data/adb/ksu/.last_success_boot_id") ?: return false
+    return currentBootId == lastSuccessBootId
 }
 
 suspend fun getCurrentKmi(): String = withContext(Dispatchers.IO) {
