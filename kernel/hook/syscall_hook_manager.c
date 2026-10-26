@@ -8,7 +8,6 @@
 #include <trace/events/syscalls.h>
 
 #include <linux/version.h>
-#include <linux/sched/task_stack.h>
 #include <linux/compat.h>
 
 #include "arch.h"
@@ -107,19 +106,17 @@ static void ksu_sys_enter_handler(void *data, struct pt_regs *regs, long id)
         return;
 
     if (ksu_has_syscall_hook(id)) {
-        struct pt_regs *current_regs = task_pt_regs(current);
-
 #if defined(__x86_64__)
         // Stash the original syscall number in ax.
         // We use ax because it currently just holds -ENOSYS and is safe to overwrite.
-        current_regs->ax = id;
-        current_regs->orig_ax = ksu_dispatcher_nr;
+        regs->ax = id;
+        regs->orig_ax = ksu_dispatcher_nr;
 #elif defined(__aarch64__)
-        PT_REGS_ORIG_SYSCALL(current_regs) = id;
-        current_regs->syscallno = ksu_dispatcher_nr;
+        PT_REGS_ORIG_SYSCALL(regs) = id;
+        regs->syscallno = ksu_dispatcher_nr;
 #elif defined(__riscv)
         /* orig_a0 retains argument zero; a0 is the -ENOSYS return slot. */
-        ksu_riscv_redirect_syscall(current_regs, id, ksu_dispatcher_nr);
+        ksu_riscv_redirect_syscall(regs, id, ksu_dispatcher_nr);
 #endif
     }
 }
