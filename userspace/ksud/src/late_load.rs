@@ -133,6 +133,9 @@ pub fn run(package_name: &String, kmi: Option<String>, allow_shell: bool) -> Res
 
     // 13. Execute boot-completed stage scripts (non-blocking)
     init_event::run_stage("boot-completed", ScriptWait::NoWait);
+    if let Err(e) = init_event::write_last_success_boot_id() {
+        warn!("failed to write last successful boot id: {e:#}");
+    }
 
     // 14. Restart Manager so it gets a fresh ksu fd from the newly loaded kernel module
     info!("Restarting KernelSU Manager {package_name}...");
