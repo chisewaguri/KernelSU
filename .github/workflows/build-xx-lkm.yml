@@ -92,7 +92,8 @@ jobs:
 
         # Copy with xx- prefix and KMI-specific naming
         OUTPUT_NAME="xx-${{ matrix.kmi }}_kernelsu.ko"
-        cp kernelsu.ko "/github/workspace/out/$OUTPUT_NAME"
+        # xx master renamed its module from ksu.ko to kernelsu.ko
+        cp "$(ls kernelsu.ko ksu.ko 2>/dev/null | head -1)" "/github/workspace/out/$OUTPUT_NAME"
 
         echo "Copied to: /github/workspace/out/$OUTPUT_NAME"
         ls -la "/github/workspace/out/$OUTPUT_NAME"
