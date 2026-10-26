@@ -47,6 +47,7 @@ mod android {
     pub const PREINIT_MANIFEST_FILE: &str = ".manifest";
     pub const PREINIT_BOOTCOUNT_FILE: &str = ".preinit_bootcount";
     pub const PREINIT_STATUS_PATH: &str = concatcp!(WORKING_DIR, "preinit_status");
+    pub const LAST_SUCCESS_BOOT_ID_PATH: &str = concatcp!(WORKING_DIR, ".last_success_boot_id");
 
     pub const MODULE_WEB_DIR: &str = "webroot";
     pub const MODULE_ACTION_SH: &str = "action.sh";
