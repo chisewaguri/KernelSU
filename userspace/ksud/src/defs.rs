@@ -52,6 +52,7 @@ mod android {
     pub const MODULE_WEB_DIR: &str = "webroot";
     pub const MODULE_ACTION_SH: &str = "action.sh";
     pub const DISABLE_FILE_NAME: &str = "disable";
+    pub const DISABLE_DONE_FILE_NAME: &str = ".disable_done";
     pub const UPDATE_FILE_NAME: &str = "update";
     pub const REMOVE_FILE_NAME: &str = "remove";
     pub const MODULE_INIT_RC_DIR: &str = "initrc";
