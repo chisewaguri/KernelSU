@@ -72,6 +72,7 @@ A KernelSU module is a folder placed in `/data/adb/modules` with the structure b
 │   ├── service.sh          <--- This script will be executed in late_start service
 │   ├── boot-completed.sh   <--- This script will be executed on boot completed
 |   ├── uninstall.sh        <--- This script will be executed when KernelSU removes your module
+|   ├── disable.sh          <--- This script will be executed once on the next boot after your module is disabled
 |   ├── action.sh           <--- This script will be executed when user click the Action button in KernelSU app
 │   ├── system.prop         <--- Properties in this file will be loaded as system properties by resetprop
 │   ├── sepolicy.rule       <--- Additional custom sepolicy rules
@@ -136,6 +137,8 @@ The `description` field can be dynamically overridden at runtime using the modul
 ### Shell scripts
 
 Please read the [Boot scripts](#boot-scripts) section to understand the difference between `post-fs-data.sh` and `service.sh`. For most module developers, `service.sh` should be good enough if you just need to run a boot script, if you need to run the script after boot completed, please use `boot-completed.sh`. If you want to do something after mounting OverlayFS, please use `post-mount.sh`.
+
+`disable.sh` runs once on the next boot after your module is disabled, before the boot scripts of any module, and has the same time limit as they do. Use it to undo changes your module made outside its own directory. In safe mode it waits for the next normal boot, and a module marked for removal runs `uninstall.sh` instead. It may run again if the device shuts down while it runs, so make it safe to run twice.
 
 In all scripts of your module, please use `MODDIR=${0%/*}` to get your module's base directory path; do **NOT** hardcode your module path in scripts.
 

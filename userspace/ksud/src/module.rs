@@ -422,8 +422,24 @@ pub fn load_system_prop() -> Result<()> {
 }
 
 pub fn prune_modules() -> Result<()> {
+    let wait = ScriptWait::Until(Instant::now() + defs::BOOT_STAGE_TIMEOUT);
     foreach_module(All, |module| {
         if !module.join(defs::REMOVE_FILE_NAME).exists() {
+            // Tools enable a module by deleting the disable flag, so clear the marker here
+            let done = module.join(defs::DISABLE_DONE_FILE_NAME);
+            let disable_script = module.join("disable.sh");
+            if !module.join(defs::DISABLE_FILE_NAME).exists() {
+                std::fs::remove_file(&done).ok();
+            } else if !done.exists() && disable_script.exists() {
+                match exec_script(&disable_script, wait) {
+                    Ok(()) => {
+                        if let Err(e) = ensure_file_exists(&done) {
+                            warn!("Failed to create {}: {e}", done.display());
+                        }
+                    }
+                    Err(e) => warn!("Failed to exec disable script: {e}"),
+                }
+            }
             return Ok(());
         }
 
@@ -659,10 +675,12 @@ pub fn handle_updated_modules() -> Result<()> {
         if let Some(name) = updated_module.file_name() {
             let module_dir = modules_root.join(name);
             let mut disabled = false;
+            let mut disable_done = false;
             let mut removed = false;
             if module_dir.exists() {
                 // If the old module is disabled, we need to also disable the new one
                 disabled = module_dir.join(defs::DISABLE_FILE_NAME).exists();
+                disable_done = module_dir.join(defs::DISABLE_DONE_FILE_NAME).exists();
                 removed = module_dir.join(defs::REMOVE_FILE_NAME).exists();
                 remove_dir_all(&module_dir)?;
             }
@@ -676,6 +694,11 @@ pub fn handle_updated_modules() -> Result<()> {
                 let path = module_dir.join(defs::DISABLE_FILE_NAME);
                 if let Err(e) = ensure_file_exists(&path) {
                     warn!("Failed to create {}: {e}", path.display());
+                }
+                // Keep disable.sh from running again just because the module was updated
+                let done = module_dir.join(defs::DISABLE_DONE_FILE_NAME);
+                if disable_done && let Err(e) = ensure_file_exists(&done) {
+                    warn!("Failed to create {}: {e}", done.display());
                 }
             }
         }
