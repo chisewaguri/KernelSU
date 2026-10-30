@@ -238,7 +238,7 @@
     <string name="settings_mode_enable_by_default">Aktifkan (Bawaan)</string>
     <string name="settings_mode_disable_until_reboot">Nonaktifkan hingga mulai ulang</string>
     <string name="settings_mode_disable_always">Selalu nonaktifkan</string>
-    <string name="settings_avc_spoof">Spoof log AVC</string>
+    <string name="settings_avc_spoof">Spoof Log AVC</string>
     <string name="settings_avc_spoof_summary">Memperbaiki kebocoran konteks SELinux akibat penolakan AVC yang tercatat di log audit</string>
     <string name="processing">Memproses…</string>
     <string name="refresh_pulling">Tarik ke bawah untuk menyegarkan</string>
