@@ -19,10 +19,8 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.webkit.WebViewAssetLoader
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import me.weishu.kernelsu.R
-import me.weishu.kernelsu.data.model.AppInfo
 import me.weishu.kernelsu.data.repository.ModuleRepositoryImpl
 import me.weishu.kernelsu.ui.util.AppIconCache
 import me.weishu.kernelsu.ui.util.createRootShell
@@ -39,10 +37,6 @@ private const val INTERNAL_BLOB_DOWNLOAD_HOST = "blob-download.kernelsu.internal
 
 private fun loadDownloadJs(context: Context): String {
     return context.assets.open("webview/download.js").bufferedReader(Charsets.UTF_8).use { it.readText() }
-}
-
-internal fun webUIApps(): List<AppInfo> = runBlocking {
-    SuperUserViewModel.loadApps(useCache = true).getOrNull()?.first.orEmpty()
 }
 
 fun Activity.setTaskDescription(label: String) {
