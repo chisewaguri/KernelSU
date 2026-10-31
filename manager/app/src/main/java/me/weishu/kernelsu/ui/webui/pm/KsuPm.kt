@@ -5,7 +5,7 @@ import android.webkit.JavascriptInterface
 import androidx.core.content.pm.PackageInfoCompat
 import kotlinx.coroutines.runBlocking
 import me.weishu.kernelsu.data.model.AppInfo
-import me.weishu.kernelsu.ui.webui.webUIApps
+import me.weishu.kernelsu.ui.viewmodel.SuperUserViewModel
 import org.json.JSONArray
 import org.json.JSONObject
 
