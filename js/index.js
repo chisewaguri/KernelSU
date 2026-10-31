@@ -142,12 +142,17 @@ export function getPackagesInfo(packages) {
   }
 }
 
-const pmSupported = typeof ksu !== "undefined" && typeof ksu.pm === "function";
-
 export const pm = {
-  support: pmSupported,
-  version: pmSupported ? ksu.pm().version() : 0,
+  get support() {
+    return typeof ksu !== "undefined" && typeof ksu.pm === "function";
+  },
+  get version() {
+    return this.support && typeof ksu.pm().version === "function" ? ksu.pm().version() : 0;
+  },
   listPackages(type) {
+    if (typeof ksu === "undefined" || typeof ksu.pm !== "function") {
+      return [...new Set(listPackages(type))];
+    }
     try {
       return JSON.parse(ksu.pm().listPackages(type));
     } catch (error) {
@@ -155,6 +160,17 @@ export const pm = {
     }
   },
   getPackagesInfo(packages) {
+    if (typeof ksu === "undefined" || typeof ksu.pm !== "function") {
+      return getPackagesInfo(packages).map((info) => {
+        if ("error" in info) {
+          return info;
+        }
+        return {
+          ...info,
+          userId: typeof info.uid === "number" ? Math.floor(info.uid / 100000) : null,
+        };
+      });
+    }
     try {
       if (typeof packages !== "string") {
         packages = JSON.stringify(packages);
@@ -170,11 +186,13 @@ export function exit() {
   ksu.exit();
 }
 
-const ioSupported = typeof ksu !== "undefined" && typeof ksu.io === "function";
-
 export const io = {
-  support: ioSupported,
-  version: ioSupported ? ksu.io().version() : 0,
+  get support() {
+    return typeof ksu !== "undefined" && typeof ksu.io === "function";
+  },
+  get version() {
+    return this.support && typeof ksu.io().version === "function" ? ksu.io().version() : 0;
+  },
 
   File(path) {
     const impl = ksu.io().File(path);

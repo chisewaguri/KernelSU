@@ -72,7 +72,9 @@ interface PackageInfoPerUid extends PackagesInfo {
 interface KsuPm {
     readonly support: boolean;
     readonly version: number;
+    /** Falls back to the top-level `listPackages` when the new pm interface is unavailable. */
     listPackages(type: string): string[];
+    /** Falls back to the top-level `getPackagesInfo` when the new pm interface is unavailable. */
     getPackagesInfo(packages: string[]): Array<PackageInfoPerUid | PackageInfoError>;
 }
 
