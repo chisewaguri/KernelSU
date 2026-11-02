@@ -614,22 +614,20 @@ void ksu_selinux_hide_drop_backup_if_unused()
 /*
  * Caveat:  Mutates scontext.
  */
-static int string_to_context_struct(struct policydb *pol, struct policydb *orig_pol, struct sidtab *sidtabp,
-                                    struct sidtab *orig_sidtabp, char *scontext, const char *source, u32 source_len,
-                                    struct context *ctx, struct context *orig_ctx, u32 def_sid, int *orig_rc_p)
+static int string_to_context_struct(struct policydb *pol, struct sidtab *sidtabp, char *scontext, struct context *ctx,
+                                    u32 def_sid)
 {
-    struct role_datum *role, *orig_role;
-    struct type_datum *typdatum, *orig_typdatum;
-    struct user_datum *usrdatum, *orig_usrdatum;
+    struct role_datum *role;
+    struct type_datum *typdatum;
+    struct user_datum *usrdatum;
     char *scontextp, *p, oldc;
-    bool orig_valid = true;
-    int rc = -EINVAL, orig_rc = -EINVAL;
+    int rc = 0;
 
     context_init(ctx);
-    context_init(orig_ctx);
 
-    // split fields once
-    // look up both policies
+    /* Parse the security context. */
+
+    rc = -EINVAL;
     scontextp = scontext;
 
     /* Extract the user. */
@@ -643,15 +641,10 @@ static int string_to_context_struct(struct policydb *pol, struct policydb *orig_
     *p++ = 0;
 
     usrdatum = symtab_search(&pol->p_users, scontextp);
-    orig_usrdatum = symtab_search(&orig_pol->p_users, scontextp);
     if (!usrdatum)
         goto out;
 
     ctx->user = usrdatum->value;
-    if (orig_usrdatum)
-        orig_ctx->user = orig_usrdatum->value;
-    else
-        orig_valid = false;
 
     /* Extract role. */
     scontextp = p;
@@ -664,14 +657,9 @@ static int string_to_context_struct(struct policydb *pol, struct policydb *orig_
     *p++ = 0;
 
     role = symtab_search(&pol->p_roles, scontextp);
-    orig_role = symtab_search(&orig_pol->p_roles, scontextp);
     if (!role)
         goto out;
     ctx->role = role->value;
-    if (orig_role)
-        orig_ctx->role = orig_role->value;
-    else
-        orig_valid = false;
 
     /* Extract type. */
     scontextp = p;
@@ -681,42 +669,23 @@ static int string_to_context_struct(struct policydb *pol, struct policydb *orig_
     *p++ = 0;
 
     typdatum = symtab_search(&pol->p_types, scontextp);
-    orig_typdatum = symtab_search(&orig_pol->p_types, scontextp);
     if (!typdatum || typdatum->attribute)
         goto out;
 
     ctx->type = typdatum->value;
-    if (orig_typdatum && !orig_typdatum->attribute)
-        orig_ctx->type = orig_typdatum->value;
-    else
-        orig_valid = false;
 
     rc = mls_context_to_sid(pol, oldc, p, ctx, sidtabp, def_sid);
-    if (orig_valid) {
-        if (oldc) {
-            size_t offset = p - scontext;
+    if (rc)
+        goto out;
 
-            // restore MLS suffix for live policy
-            memcpy(p, source + offset, source_len - offset);
-            p[source_len - offset] = '\0';
-        }
-        // validate live context with live policy
-        orig_rc = mls_context_to_sid(orig_pol, oldc, p, orig_ctx, orig_sidtabp, def_sid);
-        if (!orig_rc && !policydb_context_isvalid(orig_pol, orig_ctx))
-            orig_rc = -EINVAL;
-    }
-
-    if (!rc && !policydb_context_isvalid(pol, ctx))
-        rc = -EINVAL;
+    /* Check the validity of the new context. */
+    rc = -EINVAL;
+    if (!policydb_context_isvalid(pol, ctx))
+        goto out;
+    rc = 0;
 out:
-    if (rc) {
+    if (rc)
         context_destroy(ctx);
-        // ignore live result if backup fails
-        orig_rc = -EINVAL;
-    }
-    if (rc || orig_rc)
-        context_destroy(orig_ctx);
-    *orig_rc_p = orig_rc;
     return rc;
 }
 
@@ -726,73 +695,92 @@ static int security_context_to_sid_with_policy(struct selinux_policy *policy, co
     struct selinux_policy *orig_policy;
     struct policydb *policydb, *orig_policydb;
     struct sidtab *sidtab, *orig_sidtab;
-    char *scontext2;
+    char scontext2_onstack[128] __aligned(sizeof(long));
+    char scontext3_onstack[128] __aligned(sizeof(long));
+    char *scontext2, *scontext3 = NULL;
     struct context context, orig_context;
-    int rc = 0, orig_rc = -EINVAL;
-    u32 orig_sid;
+    int rc = 0, orig_rc = 0;
+    u32 orig_sid = SECSID_NULL;
 
     /* An empty security context is never valid. */
     if (!scontext_len)
         return -EINVAL;
 
     /* Copy the string to allow changes and ensure a NUL terminator */
-    scontext2 = kmemdup_nul(scontext, scontext_len, gfp_flags);
-    if (!scontext2)
-        return -ENOMEM;
+    if (scontext_len < sizeof(scontext2_onstack)) {
+        scontext2 = scontext2_onstack;
+        memcpy(scontext2, scontext, scontext_len);
+        scontext2[scontext_len] = '\0';
+    } else {
+        scontext2 = kmemdup_nul(scontext, scontext_len, gfp_flags);
+        if (!scontext2)
+            return -ENOMEM;
+    }
 
     // removed: if (!selinux_initialized())
     *sid = SECSID_NULL;
     if (orig_sid_p)
         *orig_sid_p = SECSID_NULL;
 
-    // removed: if (force)
-retry:
     rcu_read_lock();
     policydb = &policy->policydb;
     sidtab = policy->sidtab;
+    rc = string_to_context_struct(policydb, sidtab, scontext2, &context, def_sid);
+    if (!rc) {
+        rc = sidtab_context_to_sid(sidtab, &context, sid);
+        context_destroy(&context);
+    }
+    rcu_read_unlock();
+    if (rc)
+        goto out;
+
+    /*
+     * Only touch the live policy after the backup policy accepted the
+     * context. Contexts absent from the backup return without live-policy
+     * lookups, while accepted contexts still enter the live SID table.
+     */
+    if (scontext_len < sizeof(scontext3_onstack)) {
+        scontext3 = scontext3_onstack;
+        memcpy(scontext3, scontext, scontext_len);
+        scontext3[scontext_len] = '\0';
+    } else {
+        scontext3 = kmemdup_nul(scontext, scontext_len, gfp_flags);
+        if (!scontext3) {
+            rc = -ENOMEM;
+            goto out;
+        }
+    }
+
+retry_live:
+    orig_sid = SECSID_NULL;
+    rcu_read_lock();
     orig_policy = rcu_dereference(selinux_state.policy);
     orig_policydb = &orig_policy->policydb;
     orig_sidtab = orig_policy->sidtab;
-
-    // parse both policies together
-    orig_rc = -EINVAL;
-    rc = string_to_context_struct(policydb, orig_policydb, sidtab, orig_sidtab, scontext2, scontext, scontext_len,
-                                  &context, &orig_context, def_sid, &orig_rc);
-    if (rc)
-        goto out_unlock;
-
-    // update backup sidtab first
-    rc = sidtab_context_to_sid(sidtab, &context, sid);
-    context_destroy(&context);
-    if (rc) {
-        if (!orig_rc)
-            context_destroy(&orig_context);
-        // backup sidtab is not reloaded
-        orig_rc = rc;
-        goto out_unlock;
+    orig_rc = string_to_context_struct(orig_policydb, orig_sidtab, scontext3, &orig_context, def_sid);
+    if (!orig_rc) {
+        orig_rc = sidtab_context_to_sid(orig_sidtab, &orig_context, &orig_sid);
+        context_destroy(&orig_context);
     }
-
-    if (orig_rc)
-        goto out_unlock;
-
-    // only sync valid contexts
-    // sync to live sidtab
-    orig_rc = sidtab_context_to_sid(orig_sidtab, &orig_context, &orig_sid);
-    context_destroy(&orig_context);
-    if (!orig_rc && orig_sid_p)
-        *orig_sid_p = orig_sid;
-    if (orig_rc == -ESTALE) {
-        // retry after live policy reload
-        rcu_read_unlock();
-        memcpy(scontext2, scontext, scontext_len);
-        scontext2[scontext_len] = '\0';
-        goto retry;
-    }
-out_unlock:
     rcu_read_unlock();
+    if (orig_rc == -ESTALE) {
+        /* Reparse with the current live policy after a reload. */
+        memcpy(scontext3, scontext, scontext_len);
+        scontext3[scontext_len] = '\0';
+        goto retry_live;
+    }
+
+out:
+    if (rc)
+        orig_rc = rc;
     if (orig_rc_p)
         *orig_rc_p = orig_rc;
-    kfree(scontext2);
+    if (orig_sid_p)
+        *orig_sid_p = orig_sid;
+    if (scontext3 && scontext3 != scontext3_onstack)
+        kfree(scontext3);
+    if (scontext2 != scontext2_onstack)
+        kfree(scontext2);
     return rc;
 }
 
