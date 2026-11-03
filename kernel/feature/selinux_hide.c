@@ -695,8 +695,6 @@ static int security_context_to_sid_with_policy(struct selinux_policy *policy, co
     struct selinux_policy *orig_policy;
     struct policydb *policydb, *orig_policydb;
     struct sidtab *sidtab, *orig_sidtab;
-    char scontext2_onstack[128] __aligned(sizeof(long));
-    char scontext3_onstack[128] __aligned(sizeof(long));
     char *scontext2, *scontext3 = NULL;
     struct context context, orig_context;
     int rc = 0, orig_rc = 0;
@@ -706,16 +704,15 @@ static int security_context_to_sid_with_policy(struct selinux_policy *policy, co
     if (!scontext_len)
         return -EINVAL;
 
-    /* Copy the string to allow changes and ensure a NUL terminator */
-    if (scontext_len < sizeof(scontext2_onstack)) {
-        scontext2 = scontext2_onstack;
-        memcpy(scontext2, scontext, scontext_len);
-        scontext2[scontext_len] = '\0';
-    } else {
-        scontext2 = kmemdup_nul(scontext, scontext_len, gfp_flags);
-        if (!scontext2)
-            return -ENOMEM;
-    }
+    /*
+     * Copy the string to allow changes and ensure a NUL terminator. Always
+     * allocate, even for short inputs: a stack buffer sized by scontext_len
+     * would make the copy cost depend on input length and hand a timing probe
+     * a boundary to watch.
+     */
+    scontext2 = kmemdup_nul(scontext, scontext_len, gfp_flags);
+    if (!scontext2)
+        return -ENOMEM;
 
     // removed: if (!selinux_initialized())
     *sid = SECSID_NULL;
@@ -739,16 +736,10 @@ static int security_context_to_sid_with_policy(struct selinux_policy *policy, co
      * context. Contexts absent from the backup return without live-policy
      * lookups, while accepted contexts still enter the live SID table.
      */
-    if (scontext_len < sizeof(scontext3_onstack)) {
-        scontext3 = scontext3_onstack;
-        memcpy(scontext3, scontext, scontext_len);
-        scontext3[scontext_len] = '\0';
-    } else {
-        scontext3 = kmemdup_nul(scontext, scontext_len, gfp_flags);
-        if (!scontext3) {
-            rc = -ENOMEM;
-            goto out;
-        }
+    scontext3 = kmemdup_nul(scontext, scontext_len, gfp_flags);
+    if (!scontext3) {
+        rc = -ENOMEM;
+        goto out;
     }
 
 retry_live:
@@ -777,10 +768,8 @@ out:
         *orig_rc_p = orig_rc;
     if (orig_sid_p)
         *orig_sid_p = orig_sid;
-    if (scontext3 && scontext3 != scontext3_onstack)
-        kfree(scontext3);
-    if (scontext2 != scontext2_onstack)
-        kfree(scontext2);
+    kfree(scontext3);
+    kfree(scontext2);
     return rc;
 }
 
