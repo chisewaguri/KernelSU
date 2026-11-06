@@ -256,8 +256,8 @@ static int __nocfi my_setprocattr(const char *name, void *value, size_t size)
     if (error)
         return error;
 
-    /* Obtain a SID for the context, if one was specified. */
-    if (size && str[0] && str[0] != '\n') {
+    /* Keep every non-empty value on the backup validation path */
+    if (size && str[0]) {
         if (str[size - 1] == '\n') {
             str[size - 1] = 0;
             size--;
