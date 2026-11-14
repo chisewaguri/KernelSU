@@ -71,9 +71,7 @@ impl FeatureId {
             Self::ShellSuAdbOnly => {
                 "Shell SU ADB Only - when shell is granted root, additionally require the process to be spawned by adbd or a KernelSU root process (ksu domain)"
             }
-            Self::AvcSpoof => {
-                "AVC Spoof - fix selinux context leak due to avc denial"
-            }
+            Self::AvcSpoof => "AVC Spoof - fix selinux context leak due to avc denial",
         }
     }
 }
